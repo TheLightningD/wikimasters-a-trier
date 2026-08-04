@@ -88,7 +88,10 @@
   }
 
   async function labelOne() {
-    if (hasTargetLabel()) return true;
+    if (hasTargetLabel()) {
+      report("Étiquette déjà présente");
+      return true;
+    }
     let option = targetOption();
     if (option) {
       option.click();

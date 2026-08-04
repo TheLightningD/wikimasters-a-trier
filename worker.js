@@ -16,7 +16,8 @@ async function automate(page, mode) {
   await page.waitForFunction(() => window.__wmDoneResult !== null, null, { timeout: 180000 });
   const result = await page.evaluate(() => ({
     stats: window.__wmDoneResult,
-    status: document.querySelector('#wm-tri-status')?.textContent || ''
+    status: document.querySelector('#wm-tri-status')?.textContent || '',
+    logs: window.__WM_TRI__?.logs || []
   }));
   if (/introuvable|delai depasse|délai dépassé/i.test(result.status)) throw new Error(result.status);
   return result;
@@ -52,7 +53,7 @@ async function automate(page, mode) {
     }) || new URL('/collection', pullsUrl).href;
 
     const pulls = await automate(page, 'pulls');
-    console.log(JSON.stringify({ pulls: pulls.stats }));
+    console.log(JSON.stringify({ pulls: pulls.stats, logs: pulls.logs }));
     if (!pulls.stats.packs) {
       const pullControls = await page.locator('button,[role="button"]').evaluateAll(items => [...new Set(items.map(item => `${item.innerText || ''} ${item.getAttribute('aria-label') || ''}`.trim()).filter(Boolean))].slice(0, 20));
       console.log(JSON.stringify({ pullControls }));
