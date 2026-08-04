@@ -1,5 +1,6 @@
 const { chromium } = require('playwright-core');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
@@ -60,6 +61,7 @@ async function automate(page, mode) {
         await page.getByRole('button', { name: /^sélectionner$/i }).click();
         await page.waitForTimeout(500);
         await page.screenshot({ path: 'failure.png', fullPage: true });
+        fs.writeFileSync('failure.html', await page.content());
         throw new Error('Diagnostic du mode sélection');
       }
       collection = await automate(page, 'collection');
