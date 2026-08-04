@@ -155,6 +155,7 @@
 
     while (state.running && Date.now() < deadline) {
       const trigger = find(LABEL_TRIGGER, true);
+      report(trigger ? "Champ d’étiquette trouvé" : "Recherche de la carte");
       if (!trigger) {
         const card = await waitFor(() => [...document.querySelectorAll('.pack-card,.cursor-pointer,[class*="cursor-pointer"]')]
           .filter(el => visible(el) && !el.matches('button,a,input') && !el.closest('#wm-tri-panel'))
@@ -164,6 +165,7 @@
           }), 4000);
         if (card) {
           card.click();
+          report("Détails de la carte ouverts");
           await sleep(300);
         }
       }
