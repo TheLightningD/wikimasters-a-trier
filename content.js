@@ -4,9 +4,9 @@
 
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const norm = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-  const label = el => norm([el.innerText, el.value, el.getAttribute("aria-label"), el.title].filter(Boolean).join(" "));
+  const label = el => norm([el.innerText, el.value, el.getAttribute("aria-label"), el.getAttribute("placeholder"), el.title].filter(Boolean).join(" "));
   const visible = el => !!(el && el.isConnected && !el.disabled && el.getAttribute("aria-disabled") !== "true" && el.getClientRects().length);
-  const controls = () => [...document.querySelectorAll('button,[role="button"],[role="option"],[role="menuitem"],input[type="button"],input[type="submit"],a[href]')]
+  const controls = () => [...document.querySelectorAll('button,[role="button"],[role="combobox"],[role="option"],[role="menuitem"],input[type="button"],input[type="submit"],a[href]')]
     .filter(el => visible(el) && !el.closest("#wm-tri-panel"));
   const find = (regex, unused) => controls().find(el => regex.test(label(el)) && (!unused || !state.used.has(el)));
   const waitFor = async (fn, timeout = 3000) => {

@@ -21,7 +21,7 @@
       document.querySelector('.pack-card').onclick = () => {
         const dialog = document.createElement('dialog');
         dialog.setAttribute('role', 'dialog');
-        dialog.innerHTML = '<button role="combobox">Ajouter une étiquette…</button>';
+        dialog.innerHTML = '<input role="combobox" placeholder="Ajouter une étiquette…">';
         document.body.append(dialog);
         dialog.showModal();
         dialog.querySelector('[role="combobox"]').onclick = () => {
