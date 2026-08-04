@@ -69,7 +69,14 @@
     trigger.click();
     const option = await waitFor(targetOption, 2500);
     if (!option) {
-      if (strict) throw new Error("Option « à trier » introuvable");
+      if (strict) {
+        const hints = [...document.querySelectorAll('button,[role],input')]
+          .filter(visible)
+          .map(el => label(el))
+          .filter(value => /etiqu|label|tag|trier|ajouter|recherch|creer/.test(value))
+          .slice(0, 12);
+        throw new Error(`Option « à trier » introuvable (contrôles: ${hints.join(' | ') || 'aucun'})`);
+      }
       return true;
     }
     if (option.getAttribute("aria-selected") !== "true" && option.getAttribute("aria-checked") !== "true") {
