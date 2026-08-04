@@ -30,11 +30,15 @@
       modal.innerHTML = '<h2>Appliquer une étiquette</h2><input placeholder="Chercher ou créer une étiquette…"><button>à trier</button>';
       document.body.append(modal);
       modal.querySelector('button').onclick = () => {
-        cards.filter(card => card.dataset.selected === 'true').forEach(card => {
-          card.querySelector('.cursor-pointer').insertAdjacentHTML('beforeend', '<span class="rounded-full">à trier</span>');
-          card.dataset.selected = 'false';
-        });
-        modal.remove(); refresh();
+        const selected = cards.filter(card => card.dataset.selected === 'true');
+        modal.innerHTML = `<p>${selected.length} cartes étiquetées.</p><button id="done">Terminé</button>`;
+        modal.querySelector('#done').onclick = () => {
+          selected.forEach(card => {
+            card.querySelector('.cursor-pointer').insertAdjacentHTML('beforeend', '<span class="rounded-full">à trier</span>');
+            card.dataset.selected = 'false';
+          });
+          modal.remove(); refresh();
+        };
       };
     };
   </script>

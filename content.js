@@ -150,6 +150,11 @@
         const option = await waitFor(() => controls().find(el => norm(el.innerText || el.textContent || el.getAttribute('aria-label') || '') === 'a trier'), 2500);
         if (!option) throw new Error("Étiquette « à trier » introuvable");
         option.click();
+        const done = await waitFor(() => controls().find(el => /^termine$/.test(label(el))), 5000);
+        if (done) {
+          done.click();
+          await sleep(300);
+        }
         const confirmed = await waitFor(() => unlabelled.every(card => [...card.querySelectorAll('span.rounded-full')]
           .some(chip => norm(chip.textContent) === 'a trier')), 3000);
         if (!confirmed) throw new Error("Étiquette « à trier » non confirmée dans la collection");
