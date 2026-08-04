@@ -19,7 +19,7 @@ async function automate(page, mode) {
     status: document.querySelector('#wm-tri-status')?.textContent || '',
     logs: window.__WM_TRI__?.logs || []
   }));
-  if (/introuvable|delai depasse|délai dépassé/i.test(result.status)) throw new Error(result.status);
+  if (/introuvable|delai depasse|délai dépassé/i.test(result.status)) throw new Error(`${result.status} · ${result.logs.join(' > ')}`);
   return result;
 }
 
