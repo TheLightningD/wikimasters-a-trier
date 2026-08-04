@@ -20,9 +20,9 @@
   };
 
   const PACK = /(?:ouvrir|reclamer|recuperer).*(?:paquet|pack)|(?:paquet|pack).*(?:ouvrir|disponible)|nouveau (?:paquet|pack)/;
-  const REVEAL = /reveler|retourner|decouvrir|voir la carte/;
   const LABEL_TRIGGER = /etiquette|etiqueter|label|tag|classer/;
   const CONTINUE = /continuer|terminer|suivant|fermer|ajouter.*collection|collectionner|conserver/;
+  const MORE_CARDS = /encore \d+ carte/;
   const DANGER = /acheter|paiement|vendre|supprimer|echanger/;
   const COLLECTION = document.documentElement.dataset.wmMode === "collection";
 
@@ -145,38 +145,42 @@
   }
 
   async function processPack(packButton) {
-    const before = state.stats.cards;
     packButton.click();
     state.stats.packs++;
     report("Pack ouvert");
     await sleep(600);
     const deadline = Date.now() + 45000;
-    let idleSince = Date.now();
 
     while (state.running && Date.now() < deadline) {
-      const reveal = find(REVEAL, true);
-      if (reveal && !DANGER.test(label(reveal))) {
-        state.used.add(reveal);
-        reveal.click();
-        idleSince = Date.now();
+      const trigger = find(LABEL_TRIGGER, true);
+      if (!trigger) {
+        const card = await waitFor(() => [...document.querySelectorAll('.pack-card,.cursor-pointer,[class*="cursor-pointer"]')]
+          .filter(el => visible(el) && !el.matches('button,a,input') && !el.closest('#wm-tri-panel'))
+          .find(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 150 && rect.height > 80 && rect.width * rect.height < innerWidth * innerHeight * .7;
+          }), 4000);
+        if (card) {
+          card.click();
+          await sleep(300);
+        }
+      }
+
+      if (!await labelOne()) throw new Error("Pack ouvert, mais commande d’étiquette introuvable");
+
+      const more = await waitFor(() => find(MORE_CARDS, true), 2000);
+      if (more) {
+        state.used.add(more);
+        more.click();
         await sleep(300);
         continue;
       }
-      if (await labelOne()) {
-        idleSince = Date.now();
-        continue;
-      }
-      const next = find(CONTINUE);
-      if (next && state.stats.cards > before) {
-        next.click();
-        await sleep(600);
-        return;
-      }
-      if (Date.now() - idleSince > 5000) {
-        if (state.stats.cards === before) throw new Error("Pack ouvert, mais commande d’étiquette introuvable");
-        return;
-      }
-      await sleep(200);
+
+      const done = await waitFor(() => find(CONTINUE), 2000);
+      if (!done) throw new Error("Pack étiqueté, mais bouton de fin introuvable");
+      done.click();
+      await sleep(600);
+      return;
     }
     if (state.running) throw new Error("Délai dépassé pendant le traitement du pack");
   }
@@ -192,7 +196,7 @@
         await processCollection();
       } else {
         while (state.running) {
-          const pack = find(PACK);
+          const pack = await waitFor(() => find(PACK), state.stats.packs ? 2000 : 10000);
           if (!pack || DANGER.test(label(pack))) break;
           await processPack(pack);
         }
