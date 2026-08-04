@@ -38,9 +38,12 @@
           return;
         }
         dialog.querySelector('input').onclick = () => {
-          dialog.insertAdjacentHTML('beforeend', '<div role="listbox"><button role="option" aria-selected="true">à trier</button><button role="option">Keep</button></div>');
-          dialog.querySelector('[role="option"]').onclick = () => {
+          const portal = document.createElement('div');
+          portal.innerHTML = '<button class="label-option" aria-selected="true">à trier</button><button>Keep</button>';
+          document.body.append(portal);
+          portal.querySelector('.label-option').onclick = () => {
             tagged[index] = true;
+            portal.remove();
             dialog.close(); dialog.remove();
           };
         };

@@ -57,12 +57,7 @@
     stopEl.hidden = !running;
   };
 
-  const targetOption = () => controls().find(el => {
-    if (label(el) !== "a trier") return false;
-    const role = el.getAttribute("role");
-    const popup = el.closest('[role="dialog"],[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]');
-    return !!popup || ["option", "menuitem", "checkbox"].includes(role);
-  });
+  const targetOption = () => controls().find(el => label(el) === "a trier");
   const hasTargetLabel = () => controls().some(el => /retirer.*etiquette.*a trier/.test(label(el)));
 
   async function applyLabel(trigger, strict = false) {
@@ -98,7 +93,7 @@
 
     const trigger = find(LABEL_TRIGGER, true);
     if (!trigger || DANGER.test(label(trigger))) return false;
-    return await applyLabel(trigger) ? "selected" : false;
+    return await applyLabel(trigger, true) ? "selected" : false;
   }
 
   const cardCandidate = () => [...document.querySelectorAll('.pack-card,.cursor-pointer,[class*="cursor-pointer"]')]

@@ -20,7 +20,9 @@ async function automate(page, mode) {
     logs: window.__WM_TRI__?.logs || [],
     testVerified: window.__verifiedCount
   }));
-  if (/introuvable|delai depasse|délai dépassé/i.test(result.status)) throw new Error(`${result.status} · ${result.logs.join(' > ')}`);
+  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée/i.test(result.status)) {
+    throw new Error(`${result.status} · ${result.logs.join(' > ')}`);
+  }
   return result;
 }
 
