@@ -207,6 +207,13 @@
         continue;
       }
 
+      const nextCard = [...document.querySelectorAll('button')].find(el => visible(el) && el.querySelector('polyline[points="9 18 15 12 9 6"]'));
+      if (nextCard) {
+        nextCard.click();
+        await sleep(300);
+        continue;
+      }
+
       const done = await waitFor(() => find(CONTINUE), 2000);
       if (!done) throw new Error("Pack étiqueté, mais bouton de fin introuvable");
       done.click();

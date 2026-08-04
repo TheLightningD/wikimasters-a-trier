@@ -21,11 +21,11 @@
     const showCard = () => {
       const index = pack * 3 + card;
       const action = card < 2
-        ? `<button id="more">Encore ${2 - card} carte(s)</button>`
+        ? `<button id="next-card"><svg><polyline points="9 18 15 12 9 6"></polyline></svg></button><button id="more" disabled>Encore ${2 - card} carte(s)</button>`
         : '<button id="continue">Continuer</button>';
       app.innerHTML = `<p>Carte ${card + 1} / 3</p><article class="pack-card cursor-pointer"><strong>Carte ${index + 1}</strong></article>${action}`;
       document.querySelector('.pack-card').onclick = () => {
-        const actionButton = document.querySelector('#more,#continue');
+        const actionButton = document.querySelector('#next-card,#continue');
         actionButton.disabled = true;
         const dialog = document.createElement('dialog');
         dialog.innerHTML = '<button aria-label="Fermer">×</button>' + (tagged[index]
@@ -55,7 +55,7 @@
           };
         };
       };
-      document.querySelector('#more')?.addEventListener('click', () => { card++; showCard(); });
+      document.querySelector('#next-card')?.addEventListener('click', () => { card++; showCard(); });
       document.querySelector('#continue')?.addEventListener('click', () => { pack++; card = 0; showPack(); });
     };
 
