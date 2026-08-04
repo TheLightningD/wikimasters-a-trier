@@ -137,7 +137,9 @@
 
       const unlabelled = cards.filter(card => !card.querySelector('span.rounded-full'));
       for (const card of unlabelled) {
-        card.click();
+        const checkbox = card.querySelector('input[type="checkbox"],[role="checkbox"],button');
+        if (!checkbox) throw new Error("Case de sélection de carte introuvable");
+        checkbox.click();
         await sleep(30);
       }
 
@@ -148,8 +150,10 @@
         const option = await waitFor(() => controls().find(el => norm(el.innerText || el.textContent || el.getAttribute('aria-label') || '') === 'a trier'), 2500);
         if (!option) throw new Error("Étiquette « à trier » introuvable");
         option.click();
+        const confirmed = await waitFor(() => unlabelled.every(card => [...card.querySelectorAll('span.rounded-full')]
+          .some(chip => norm(chip.textContent) === 'a trier')), 3000);
+        if (!confirmed) throw new Error("Étiquette « à trier » non confirmée dans la collection");
         state.stats.cards += unlabelled.length;
-        await sleep(500);
       }
 
       const next = controls().find(el => /^suivant/.test(norm(label(el))) && visible(el) && !el.disabled);

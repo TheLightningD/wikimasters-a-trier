@@ -55,9 +55,12 @@ async function automate(page, mode) {
       return link?.href || '';
     }) || new URL('/collection', pullsUrl).href;
 
-    const pulls = await automate(page, 'pulls');
+    const collectionOnly = process.env.COLLECTION_ONLY === 'true';
+    const pulls = collectionOnly
+      ? { stats: { packs: 0, cards: 0 }, logs: ['Packs ignorés (collection uniquement)'] }
+      : await automate(page, 'pulls');
     console.log(JSON.stringify({ pulls: pulls.stats, logs: pulls.logs, ...(pulls.testVerified === undefined ? {} : { testVerified: pulls.testVerified }) }));
-    if (!pulls.stats.packs) {
+    if (!collectionOnly && !pulls.stats.packs) {
       const pullControls = await page.locator('button,[role="button"]').evaluateAll(items => [...new Set(items.map(item => `${item.innerText || ''} ${item.getAttribute('aria-label') || ''}`.trim()).filter(Boolean))].slice(0, 20));
       console.log(JSON.stringify({ pullControls }));
     }

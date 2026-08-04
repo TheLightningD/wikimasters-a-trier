@@ -6,6 +6,12 @@ on:
     - cron: "7 */6 * * *"
     - cron: "17 3 1 * *"
   workflow_dispatch:
+    inputs:
+      collection_only:
+        description: "Parcourir uniquement la collection sans ouvrir de paquet"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -31,7 +37,8 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
           WIKIMASTERS_EMAIL: ${{ secrets.WIKIMASTERS_EMAIL }}
           WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
-          SCAN_COLLECTION: ${{ github.event.schedule == '7 */6 * * *' }}
+          COLLECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.collection_only }}
+          SCAN_COLLECTION: ${{ inputs.collection_only || github.event.schedule == '7 */6 * * *' }}
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
