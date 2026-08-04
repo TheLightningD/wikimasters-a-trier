@@ -27,7 +27,7 @@ server.listen(0, '127.0.0.1', () => {
   child.stderr.on('data', data => { output += data; });
   child.on('close', code => {
     server.close();
-    if (code !== 0 || !output.includes('"packs":2') || !output.includes('"collection":{"packs":0,"cards":2}')) {
+    if (code !== 0 || !output.includes('"packs":2') || !output.includes('"collection":{"packs":0,"cards":2}') || !output.includes('"testVerified":6')) {
       console.error(output.trim());
       process.exit(1);
     }

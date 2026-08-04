@@ -6,7 +6,7 @@
   const norm = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
   const label = el => norm([el.innerText, el.value, el.getAttribute("aria-label"), el.getAttribute("placeholder"), el.title].filter(Boolean).join(" "));
   const visible = el => !!(el && el.isConnected && !el.disabled && el.getAttribute("aria-disabled") !== "true" && el.getClientRects().length);
-  const controls = () => [...document.querySelectorAll('button,[role="button"],[role="combobox"],[role="option"],[role="menuitem"],input[type="button"],input[type="submit"],a[href]')]
+  const controls = () => [...document.querySelectorAll('button,[role="button"],[role="combobox"],[role="option"],[role="menuitem"],input:not([type]),input[type="text"],input[type="search"],input[type="button"],input[type="submit"],a[href]')]
     .filter(el => visible(el) && !el.closest("#wm-tri-panel"));
   const find = (regex, unused) => controls().find(el => regex.test(label(el)) && (!unused || !state.used.has(el)));
   const waitFor = async (fn, timeout = 3000) => {
@@ -81,29 +81,48 @@
       return true;
     }
     option.click();
-    state.stats.cards++;
-    report("Étiquette ajoutée");
     await sleep(300);
     return true;
   }
 
   async function labelOne() {
     if (hasTargetLabel()) {
-      report("Étiquette déjà présente");
-      return true;
+      return "existing";
     }
     let option = targetOption();
     if (option) {
       option.click();
-      state.stats.cards++;
-      report("Étiquette ajoutée");
       await sleep(300);
-      return true;
+      return "selected";
     }
 
     const trigger = find(LABEL_TRIGGER, true);
     if (!trigger || DANGER.test(label(trigger))) return false;
-    return applyLabel(trigger);
+    return await applyLabel(trigger) ? "selected" : false;
+  }
+
+  const cardCandidate = () => [...document.querySelectorAll('.pack-card,.cursor-pointer,[class*="cursor-pointer"]')]
+    .filter(el => visible(el) && !el.matches('button,a,input') && !el.closest('#wm-tri-panel'))
+    .find(el => {
+      const rect = el.getBoundingClientRect();
+      return rect.width > 150 && rect.height > 80 && rect.width * rect.height < innerWidth * innerHeight * .7;
+    });
+
+  async function openCardDetails() {
+    if (find(LABEL_TRIGGER) || hasTargetLabel()) return true;
+    const card = await waitFor(cardCandidate, 4000);
+    if (!card) return false;
+    card.click();
+    report("Détails de la carte ouverts");
+    return !!await waitFor(() => find(LABEL_TRIGGER) || hasTargetLabel(), 2500);
+  }
+
+  async function closeCardDetails() {
+    const close = controls().find(el => el.closest('[role="dialog"]') && (/fermer|close/.test(label(el)) || /^(x|×)$/.test(label(el))));
+    if (close) {
+      close.click();
+      await sleep(200);
+    }
   }
 
   async function processCollection() {
@@ -154,23 +173,17 @@
     const deadline = Date.now() + 45000;
 
     while (state.running && Date.now() < deadline) {
-      const trigger = find(LABEL_TRIGGER, true);
-      report(trigger ? "Champ d’étiquette trouvé" : "Recherche de la carte");
-      if (!trigger) {
-        const card = await waitFor(() => [...document.querySelectorAll('.pack-card,.cursor-pointer,[class*="cursor-pointer"]')]
-          .filter(el => visible(el) && !el.matches('button,a,input') && !el.closest('#wm-tri-panel'))
-          .find(el => {
-            const rect = el.getBoundingClientRect();
-            return rect.width > 150 && rect.height > 80 && rect.width * rect.height < innerWidth * innerHeight * .7;
-          }), 4000);
-        if (card) {
-          card.click();
-          report("Détails de la carte ouverts");
-          await sleep(300);
-        }
-      }
+      if (!await openCardDetails()) throw new Error("Pack ouvert, mais commande d’étiquette introuvable");
+      const action = await labelOne();
+      if (!action) throw new Error("Pack ouvert, mais commande d’étiquette introuvable");
 
-      if (!await labelOne()) throw new Error("Pack ouvert, mais commande d’étiquette introuvable");
+      if (action === "selected" && !hasTargetLabel()) {
+        if (!await openCardDetails()) throw new Error("Impossible de rouvrir la carte pour vérifier l’étiquette");
+      }
+      if (!await waitFor(hasTargetLabel, 2500)) throw new Error("Étiquette « à trier » non confirmée sur la carte");
+      state.stats.cards++;
+      report("Étiquette vérifiée");
+      await closeCardDetails();
 
       const more = await waitFor(() => find(MORE_CARDS, true), 2000);
       if (more) {

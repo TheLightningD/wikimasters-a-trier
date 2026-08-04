@@ -17,7 +17,8 @@ async function automate(page, mode) {
   const result = await page.evaluate(() => ({
     stats: window.__wmDoneResult,
     status: document.querySelector('#wm-tri-status')?.textContent || '',
-    logs: window.__WM_TRI__?.logs || []
+    logs: window.__WM_TRI__?.logs || [],
+    testVerified: window.__verifiedCount
   }));
   if (/introuvable|delai depasse|délai dépassé/i.test(result.status)) throw new Error(`${result.status} · ${result.logs.join(' > ')}`);
   return result;
@@ -53,7 +54,7 @@ async function automate(page, mode) {
     }) || new URL('/collection', pullsUrl).href;
 
     const pulls = await automate(page, 'pulls');
-    console.log(JSON.stringify({ pulls: pulls.stats, logs: pulls.logs }));
+    console.log(JSON.stringify({ pulls: pulls.stats, logs: pulls.logs, ...(pulls.testVerified === undefined ? {} : { testVerified: pulls.testVerified }) }));
     if (!pulls.stats.packs) {
       const pullControls = await page.locator('button,[role="button"]').evaluateAll(items => [...new Set(items.map(item => `${item.innerText || ''} ${item.getAttribute('aria-label') || ''}`.trim()).filter(Boolean))].slice(0, 20));
       console.log(JSON.stringify({ pullControls }));
