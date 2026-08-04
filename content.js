@@ -57,7 +57,7 @@
     stopEl.hidden = !running;
   };
 
-  const targetOption = () => controls().find(el => label(el) === "a trier");
+  const targetOption = () => controls().find(el => el.matches('button,[role="button"]') && label(el) === "a trier");
   const hasTargetLabel = () => controls().some(el => /retirer.*etiquette.*a trier/.test(label(el)));
 
   async function applyLabel(trigger, strict = false) {
@@ -147,7 +147,7 @@
         const tag = await waitFor(() => find(/^etiqueter$/, true), 2000);
         if (!tag) throw new Error("Bouton « Étiqueter » introuvable");
         tag.click();
-        const option = await waitFor(() => controls().find(el => norm(el.innerText || el.textContent || el.getAttribute('aria-label') || '') === 'a trier'), 2500);
+        const option = await waitFor(targetOption, 2500);
         if (!option) throw new Error("Étiquette « à trier » introuvable");
         option.click();
         const completion = await waitFor(() => {

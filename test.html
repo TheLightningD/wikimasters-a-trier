@@ -41,7 +41,7 @@
         input.onkeydown = event => {
           if (event.key !== 'ArrowDown') return;
           const portal = document.createElement('div');
-          portal.innerHTML = '<button class="label-option" aria-selected="true">à trier</button><button>Keep</button>';
+          portal.innerHTML = '<ul role="listbox"><li role="option" aria-selected="true"><button class="label-option">à trier</button></li><li role="option"><button>Keep</button></li></ul>';
           document.body.append(portal);
           portal.querySelector('.label-option').onclick = () => {
             tagged[index] = true;
