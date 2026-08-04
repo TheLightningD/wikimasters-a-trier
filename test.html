@@ -37,7 +37,9 @@
           window.__verifiedCount++;
           return;
         }
-        dialog.querySelector('input').onclick = () => {
+        const input = dialog.querySelector('input');
+        input.onkeydown = event => {
+          if (event.key !== 'ArrowDown') return;
           const portal = document.createElement('div');
           portal.innerHTML = '<button class="label-option" aria-selected="true">à trier</button><button>Keep</button>';
           document.body.append(portal);

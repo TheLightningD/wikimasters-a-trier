@@ -62,8 +62,13 @@
 
   async function applyLabel(trigger, strict = false) {
     state.used.add(trigger);
+    trigger.focus();
     trigger.click();
-    const option = await waitFor(targetOption, 2500);
+    let option = await waitFor(targetOption, 1000);
+    if (!option) {
+      trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", bubbles: true, cancelable: true }));
+      option = await waitFor(targetOption, 1500);
+    }
     if (!option) {
       if (strict) {
         const hints = [...document.querySelectorAll('button,[role],input')]
