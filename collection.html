@@ -5,9 +5,9 @@
   <h1>Collection</h1>
   <button id="select">Sélectionner</button>
   <main id="cards">
-    <div class="relative isolate group"><button role="checkbox">Sélectionner la carte</button><div class="cursor-pointer"><strong>Sans étiquette 1</strong></div></div>
-    <div class="relative isolate group"><button role="checkbox">Sélectionner la carte</button><div class="cursor-pointer"><strong>Déjà classée</strong><span class="rounded-full">favori</span></div></div>
-    <div class="relative isolate group"><button role="checkbox">Sélectionner la carte</button><div class="cursor-pointer"><strong>Sans étiquette 2</strong></div></div>
+    <div class="relative isolate group"><div class="cursor-pointer"><strong>Sans étiquette 1</strong></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group"><div class="cursor-pointer"><strong>Déjà classée</strong><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group"><div class="cursor-pointer"><strong>Sans étiquette 2</strong></div><span class="selection-indicator"></span></div>
   </main>
   <footer hidden>
     <button id="all">Tout sélectionner (page)</button>
@@ -21,7 +21,7 @@
       document.querySelector('footer').hidden = false;
       document.querySelector('#select').textContent = 'Quitter la sélection';
     };
-    cards.forEach(card => card.querySelector('[role="checkbox"]').onclick = () => {
+    cards.forEach(card => card.querySelector('.cursor-pointer').onclick = () => {
       card.dataset.selected = card.dataset.selected === 'true' ? 'false' : 'true';
       refresh();
     });

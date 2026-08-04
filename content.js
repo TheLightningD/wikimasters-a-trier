@@ -137,9 +137,9 @@
 
       const unlabelled = cards.filter(card => !card.querySelector('span.rounded-full'));
       for (const card of unlabelled) {
-        const checkbox = card.querySelector('input[type="checkbox"],[role="checkbox"],button');
-        if (!checkbox) throw new Error("Case de sélection de carte introuvable");
-        checkbox.click();
+        const selector = card.querySelector('.cursor-pointer');
+        if (!selector) throw new Error("Zone de sélection de carte introuvable");
+        selector.click();
         await sleep(30);
       }
 
