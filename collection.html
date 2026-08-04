@@ -32,7 +32,7 @@
       document.body.append(modal);
       modal.querySelector('button').onclick = () => {
         const selected = cards.filter(card => card.dataset.selected === 'true');
-        modal.innerHTML = `<p>${selected.length} cartes étiquetées.</p><button id="done">Terminé</button>`;
+        modal.innerHTML = `<p>0 carte étiquetée. (${selected.length} déjà étiquetées)</p><button id="done">Terminé</button>`;
         modal.querySelector('#done').onclick = () => {
           selected.forEach(card => {
             card.querySelector('.cursor-pointer').insertAdjacentHTML('beforeend', '<span class="rounded-full">à trier</span>');

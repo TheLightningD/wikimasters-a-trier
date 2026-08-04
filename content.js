@@ -152,8 +152,10 @@
         option.click();
         const completion = await waitFor(() => {
           const dialog = [...document.querySelectorAll('[role="dialog"],dialog')].find(visible);
-          const match = norm(dialog?.textContent).match(/(\d+) cartes? etiquetees?/);
-          return match ? Number(match[1]) : 0;
+          const text = norm(dialog?.textContent);
+          const applied = text.match(/(\d+) cartes? etiquetees?/);
+          const already = text.match(/(\d+) deja etiquetees?/);
+          return applied || already ? Number(applied?.[1] || 0) + Number(already?.[1] || 0) : 0;
         }, 5000);
         if (completion < unlabelled.length) {
           throw new Error(`Confirmation incomplète: ${completion}/${unlabelled.length} carte(s) étiquetée(s)`);
