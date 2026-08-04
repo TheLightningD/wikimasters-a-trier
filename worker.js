@@ -59,6 +59,8 @@ async function automate(page, mode) {
       if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
       if (process.env.SELECTION_DIAGNOSTIC === 'true') {
         await page.getByRole('button', { name: /^sélectionner$/i }).click();
+        await page.locator('.relative.isolate.group').first().click();
+        await page.getByRole('button', { name: /^étiqueter$/i }).click();
         await page.waitForTimeout(500);
         await page.screenshot({ path: 'failure.png', fullPage: true });
         fs.writeFileSync('failure.html', await page.content());
