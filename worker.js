@@ -52,6 +52,11 @@ async function automate(page, mode) {
     }) || new URL('/collection', pullsUrl).href;
 
     const pulls = await automate(page, 'pulls');
+    console.log(JSON.stringify({ pulls: pulls.stats }));
+    if (!pulls.stats.packs) {
+      const pullControls = await page.locator('button,[role="button"]').evaluateAll(items => [...new Set(items.map(item => `${item.innerText || ''} ${item.getAttribute('aria-label') || ''}`.trim()).filter(Boolean))].slice(0, 20));
+      console.log(JSON.stringify({ pullControls }));
+    }
     let collection = null;
     if (process.env.SCAN_COLLECTION === 'true') {
       const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
