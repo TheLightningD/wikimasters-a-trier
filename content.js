@@ -150,15 +150,19 @@
         const option = await waitFor(() => controls().find(el => norm(el.innerText || el.textContent || el.getAttribute('aria-label') || '') === 'a trier'), 2500);
         if (!option) throw new Error("Étiquette « à trier » introuvable");
         option.click();
-        const done = await waitFor(() => controls().find(el => /^termine$/.test(label(el))), 5000);
-        if (done) {
-          done.click();
-          await sleep(300);
+        const completion = await waitFor(() => {
+          const dialog = [...document.querySelectorAll('[role="dialog"],dialog')].find(visible);
+          const match = norm(dialog?.textContent).match(/(\d+) cartes? etiquetees?/);
+          return match ? Number(match[1]) : 0;
+        }, 5000);
+        if (completion < unlabelled.length) {
+          throw new Error(`Confirmation incomplète: ${completion}/${unlabelled.length} carte(s) étiquetée(s)`);
         }
-        const confirmed = await waitFor(() => unlabelled.every(card => [...card.querySelectorAll('span.rounded-full')]
-          .some(chip => norm(chip.textContent) === 'a trier')), 3000);
-        if (!confirmed) throw new Error("Étiquette « à trier » non confirmée dans la collection");
-        state.stats.cards += unlabelled.length;
+        const done = await waitFor(() => controls().find(el => /^termine$/.test(label(el))), 2000);
+        if (!done) throw new Error("Bouton « Terminé » introuvable après l’étiquetage");
+        done.click();
+        await sleep(300);
+        state.stats.cards += completion;
       }
 
       const next = controls().find(el => /^suivant/.test(norm(label(el))) && visible(el) && !el.disabled);

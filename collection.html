@@ -27,6 +27,7 @@
     });
     tag.onclick = () => {
       const modal = document.createElement('div');
+      modal.setAttribute('role', 'dialog');
       modal.innerHTML = '<h2>Appliquer une étiquette</h2><input placeholder="Chercher ou créer une étiquette…"><button>à trier</button>';
       document.body.append(modal);
       modal.querySelector('button').onclick = () => {
