@@ -25,14 +25,15 @@
         : '<button id="continue">Continuer</button>';
       app.innerHTML = `<p>Carte ${card + 1} / 3</p><article class="pack-card cursor-pointer"><strong>Carte ${index + 1}</strong></article>${action}`;
       document.querySelector('.pack-card').onclick = () => {
+        const actionButton = document.querySelector('#more,#continue');
+        actionButton.disabled = true;
         const dialog = document.createElement('dialog');
-        dialog.setAttribute('role', 'dialog');
         dialog.innerHTML = '<button aria-label="Fermer">×</button>' + (tagged[index]
           ? '<button aria-label="Retirer l’étiquette à trier">à trier</button>'
           : '<input placeholder="Ajouter une étiquette…">');
         document.body.append(dialog);
         dialog.showModal();
-        dialog.querySelector('[aria-label="Fermer"]').onclick = () => { dialog.close(); dialog.remove(); };
+        dialog.querySelector('[aria-label="Fermer"]').onclick = () => { dialog.close(); dialog.remove(); actionButton.disabled = false; };
         if (tagged[index]) {
           window.__verifiedCount++;
           return;
@@ -45,8 +46,12 @@
           document.body.append(portal);
           portal.querySelector('.label-option').onclick = () => {
             tagged[index] = true;
+            window.__verifiedCount++;
             portal.remove();
-            dialog.close(); dialog.remove();
+            input.replaceWith(Object.assign(document.createElement('button'), {
+              textContent: 'à trier',
+              ariaLabel: 'Retirer l’étiquette à trier'
+            }));
           };
         };
       };
