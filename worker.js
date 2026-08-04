@@ -1,5 +1,6 @@
 const { chromium } = require('playwright-core');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
@@ -74,6 +75,7 @@ async function automate(page, mode) {
     console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats } : {}) }));
   } catch (error) {
     await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
+    await page.content().then(html => fs.writeFileSync('failure.html', html)).catch(() => {});
     throw error;
   } finally {
     await browser.close();
