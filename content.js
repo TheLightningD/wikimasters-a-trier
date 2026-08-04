@@ -151,8 +151,7 @@
         if (!option) throw new Error("Étiquette « à trier » introuvable");
         option.click();
         const completion = await waitFor(() => {
-          const dialog = [...document.querySelectorAll('[role="dialog"],dialog')].find(visible);
-          const text = norm(dialog?.textContent);
+          const text = norm(document.body.innerText);
           const applied = text.match(/(\d+) cartes? etiquetees?/);
           const already = text.match(/(\d+) deja etiquetees?/);
           return applied || already ? Number(applied?.[1] || 0) + Number(already?.[1] || 0) : 0;
