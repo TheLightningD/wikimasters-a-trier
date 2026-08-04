@@ -32,12 +32,11 @@ jobs:
           WIKIMASTERS_EMAIL: ${{ secrets.WIKIMASTERS_EMAIL }}
           WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
           SCAN_COLLECTION: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '7 */6 * * *' }}
-          SELECTION_DIAGNOSTIC: ${{ github.event_name == 'workflow_dispatch' }}
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: diagnostic
-          path: failure.*
+          path: failure.png
 
   keepalive:
     if: github.event.schedule == '17 3 1 * *'

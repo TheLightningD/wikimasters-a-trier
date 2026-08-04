@@ -2,26 +2,41 @@
 <html lang="fr" data-wm-test="1" data-wm-mode="collection">
 <head><meta charset="utf-8"></head>
 <body>
-  <h1>Ma collection</h1>
-  <main>
-    <article class="card"><strong>Sans étiquette 1</strong><button aria-label="Gérer les étiquettes">Étiquettes</button></article>
-    <article class="card"><strong>Déjà classée</strong><span class="badge">favori</span><button aria-label="Gérer les étiquettes">Étiquettes</button></article>
-    <article class="card"><strong>Sans étiquette 2</strong><button aria-label="Gérer les étiquettes">Étiquettes</button></article>
+  <h1>Collection</h1>
+  <button id="select">Sélectionner</button>
+  <main id="cards">
+    <div class="relative isolate group"><div class="cursor-pointer"><strong>Sans étiquette 1</strong></div></div>
+    <div class="relative isolate group"><div class="cursor-pointer"><strong>Déjà classée</strong><span class="rounded-full">favori</span></div></div>
+    <div class="relative isolate group"><div class="cursor-pointer"><strong>Sans étiquette 2</strong></div></div>
   </main>
+  <footer hidden>
+    <button id="all">Tout sélectionner (page)</button>
+    <button id="tag" disabled>Étiqueter</button>
+  </footer>
   <script>
-    document.addEventListener('click', event => {
-      if (!event.target.matches('[aria-label="Gérer les étiquettes"]')) return;
-      const card = event.target.closest('article');
-      const dialog = document.createElement('dialog');
-      dialog.setAttribute('role', 'dialog');
-      dialog.innerHTML = '<button role="option">À trier</button>';
-      document.body.append(dialog);
-      dialog.showModal();
-      dialog.querySelector('button').onclick = () => {
-        card.insertAdjacentHTML('beforeend', '<span class="badge">à trier</span>');
-        dialog.close(); dialog.remove();
-      };
+    const cards = [...document.querySelectorAll('.relative.isolate.group')];
+    const tag = document.querySelector('#tag');
+    const refresh = () => { tag.disabled = !cards.some(card => card.dataset.selected === 'true'); };
+    document.querySelector('#select').onclick = () => {
+      document.querySelector('footer').hidden = false;
+      document.querySelector('#select').textContent = 'Quitter la sélection';
+    };
+    cards.forEach(card => card.onclick = () => {
+      card.dataset.selected = card.dataset.selected === 'true' ? 'false' : 'true';
+      refresh();
     });
+    tag.onclick = () => {
+      const modal = document.createElement('div');
+      modal.innerHTML = '<h2>Appliquer une étiquette</h2><input placeholder="Chercher ou créer une étiquette…"><button>à trier</button>';
+      document.body.append(modal);
+      modal.querySelector('button').onclick = () => {
+        cards.filter(card => card.dataset.selected === 'true').forEach(card => {
+          card.querySelector('.cursor-pointer').insertAdjacentHTML('beforeend', '<span class="rounded-full">à trier</span>');
+          card.dataset.selected = 'false';
+        });
+        modal.remove(); refresh();
+      };
+    };
   </script>
 </body>
 </html>

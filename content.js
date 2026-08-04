@@ -104,38 +104,43 @@
     return applyLabel(trigger);
   }
 
-  const cardOf = trigger => trigger.closest('[data-card-id],[data-testid*="card"],article,li') || trigger.parentElement;
-  const hasAnyLabel = (card, trigger) => [...card.querySelectorAll('[data-label-id],[data-testid*="label"],[data-testid*="tag"],[class*="badge"],[class*="chip"],[class~="tag"]')]
-    .some(el => el !== trigger && !el.contains(trigger) && visible(el));
-
   async function processCollection() {
-    const deadline = Date.now() + 120000;
-    let stable = 0;
-    let height = 0;
-    while (state.running && Date.now() < deadline && stable < 2) {
-      let changed = false;
-      const triggers = controls().filter(el => LABEL_TRIGGER.test(label(el)) && !state.used.has(el) && !DANGER.test(label(el)));
-      for (const trigger of triggers) {
-        state.used.add(trigger);
-        const card = cardOf(trigger);
-        if (!card || hasAnyLabel(card, trigger)) continue;
-        const before = state.stats.cards;
-        await applyLabel(trigger, true);
-        changed ||= state.stats.cards > before;
+    const enter = await waitFor(() => find(/^selectionner$/, true), 5000);
+    if (!enter) throw new Error("Bouton « Sélectionner » introuvable");
+    enter.click();
+    await sleep(300);
+
+    for (let page = 0; page < 100; page++) {
+      const cards = [...document.querySelectorAll('.relative.isolate.group')];
+      if (!cards.length) throw new Error("Cartes de collection introuvables");
+
+      const unlabelled = cards.filter(card => !card.querySelector('span.rounded-full'));
+      for (const card of unlabelled) {
+        card.click();
+        await sleep(30);
       }
-      const more = find(/charger plus|voir plus|afficher plus/, true);
-      if (more) {
-        state.used.add(more);
-        more.click();
-        changed = true;
+
+      if (unlabelled.length) {
+        const tag = await waitFor(() => find(/^etiqueter$/, true), 2000);
+        if (!tag) throw new Error("Bouton « Étiqueter » introuvable");
+        tag.click();
+        const option = await waitFor(() => controls().find(el => norm(el.innerText || el.textContent || el.getAttribute('aria-label') || '') === 'a trier'), 2500);
+        if (!option) throw new Error("Étiquette « à trier » introuvable");
+        option.click();
+        state.stats.cards += unlabelled.length;
+        await sleep(500);
       }
-      const nextHeight = document.documentElement.scrollHeight;
-      window.scrollTo(0, nextHeight);
-      await sleep(700);
-      stable = changed || nextHeight !== height ? 0 : stable + 1;
-      height = nextHeight;
+
+      const next = controls().find(el => /^suivant/.test(norm(label(el))) && visible(el) && !el.disabled);
+      if (!next) break;
+      const first = cards[0];
+      next.click();
+      if (!await waitFor(() => document.querySelector('.relative.isolate.group') !== first, 5000)) {
+        throw new Error("La page suivante de la collection ne charge pas");
+      }
+      await sleep(200);
     }
-    if (Date.now() >= deadline) throw new Error("Délai dépassé pendant le contrôle de la collection");
+
     report("Collection vérifiée");
   }
 
