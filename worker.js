@@ -56,6 +56,12 @@ async function automate(page, mode) {
     if (process.env.SCAN_COLLECTION === 'true') {
       const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
+      if (process.env.SELECTION_DIAGNOSTIC === 'true') {
+        await page.getByRole('button', { name: /^sélectionner$/i }).click();
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: 'failure.png', fullPage: true });
+        throw new Error('Diagnostic du mode sélection');
+      }
       collection = await automate(page, 'collection');
     }
 
