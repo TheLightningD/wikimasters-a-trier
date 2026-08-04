@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "WikiMasters — À trier",
+  "version": "1.0.0",
+  "description": "Ouvre les nouveaux paquets et ajoute l’étiquette « à trier » à chaque carte.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.wiki-masters.com/pulls*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

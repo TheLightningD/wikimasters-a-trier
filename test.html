@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr" data-wm-test="1">
+<head>
+  <meta charset="utf-8">
+  <title>Test WikiMasters — À trier</title>
+  <style>
+    body{font:16px system-ui;background:#101218;color:#eee;padding:30px}button{padding:10px;margin:6px}.card{border:1px solid #555;border-radius:10px;padding:12px;margin:10px;display:inline-grid;gap:8px}.badge{color:#7ee787}dialog{background:#222;color:#fff;border:1px solid #777}
+  </style>
+</head>
+<body>
+  <h1>Faux écran WikiMasters</h1>
+  <main id="app"></main>
+  <output id="result">En attente</output>
+  <script>
+    const app = document.querySelector('#app');
+    let pack = 0;
+    const showPack = () => {
+      if (pack >= 2) { app.innerHTML = '<p>Tous les packs sont ouverts.</p>'; return; }
+      app.innerHTML = '<button id="open">Ouvrir un paquet WikiMasters</button>';
+      document.querySelector('#open').onclick = () => {
+        app.innerHTML = '<section id="cards"></section>';
+        const cards = document.querySelector('#cards');
+        for (let i = 1; i <= 3; i++) {
+          const card = document.createElement('article');
+          card.className = 'card';
+          card.innerHTML = `<strong>Carte ${pack * 3 + i}</strong><button aria-label="Gérer les étiquettes">Étiquettes</button>`;
+          card.querySelector('button').onclick = () => {
+            const dialog = document.createElement('dialog');
+            dialog.setAttribute('role', 'dialog');
+            dialog.innerHTML = '<button role="option">À trier</button>';
+            document.body.append(dialog);
+            dialog.showModal();
+            dialog.querySelector('button').onclick = () => {
+              card.insertAdjacentHTML('beforeend', '<span class="badge">à trier</span>');
+              card.querySelector('button').remove();
+              dialog.close(); dialog.remove();
+              if (!document.querySelector('.card button')) {
+                const next = document.createElement('button');
+                next.textContent = 'Continuer';
+                next.onclick = () => { pack++; showPack(); };
+                app.append(next);
+              }
+            };
+          };
+          cards.append(card);
+        }
+      };
+    };
+    showPack();
+    document.addEventListener('wm-tri-finished', event => {
+      document.querySelector('#result').textContent = JSON.stringify(event.detail);
+    });
+  </script>
+  <script src="content.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+name: WikiMasters — ouvrir et étiqueter
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wikimasters-pulls
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --omit=dev
+      - run: npm start
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          WIKIMASTERS_EMAIL: ${{ secrets.WIKIMASTERS_EMAIL }}
+          WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
