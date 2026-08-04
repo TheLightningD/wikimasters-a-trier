@@ -25,7 +25,7 @@
         document.body.append(dialog);
         dialog.showModal();
         dialog.querySelector('[role="combobox"]').onclick = () => {
-          dialog.insertAdjacentHTML('beforeend', '<div role="listbox"><button role="option">à trier</button><button role="option">Keep</button></div>');
+          dialog.insertAdjacentHTML('beforeend', '<div role="listbox"><button role="option" aria-selected="true">à trier</button><button role="option">Keep</button></div>');
           dialog.querySelector('[role="option"]').onclick = () => {
             dialog.close(); dialog.remove();
             card++;

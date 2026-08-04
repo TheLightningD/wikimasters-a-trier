@@ -63,6 +63,7 @@
     const popup = el.closest('[role="dialog"],[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]');
     return !!popup || ["option", "menuitem", "checkbox"].includes(role);
   });
+  const hasTargetLabel = () => controls().some(el => /retirer.*etiquette.*a trier/.test(label(el)));
 
   async function applyLabel(trigger, strict = false) {
     state.used.add(trigger);
@@ -79,19 +80,17 @@
       }
       return true;
     }
-    if (option.getAttribute("aria-selected") !== "true" && option.getAttribute("aria-checked") !== "true") {
-      option.click();
-      state.stats.cards++;
-      report("Étiquette ajoutée");
-    }
+    option.click();
+    state.stats.cards++;
+    report("Étiquette ajoutée");
     await sleep(300);
     return true;
   }
 
   async function labelOne() {
+    if (hasTargetLabel()) return true;
     let option = targetOption();
     if (option) {
-      if (option.getAttribute("aria-selected") === "true" || option.getAttribute("aria-checked") === "true") return false;
       option.click();
       state.stats.cards++;
       report("Étiquette ajoutée");
