@@ -60,6 +60,9 @@ async function automate(page, mode) {
     }
 
     console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats } : {}) }));
+  } catch (error) {
+    await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
+    throw error;
   } finally {
     await browser.close();
   }
