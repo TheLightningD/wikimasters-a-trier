@@ -19,7 +19,7 @@
     return null;
   };
 
-  const PACK = /(?:ouvrir|reclamer|recuperer).*(?:paquet|pack)|(?:paquet|pack).*(?:ouvrir|disponible)|nouveau (?:paquet|pack)/;
+  const PACK = /^ouvrir$|(?:ouvrir|reclamer|recuperer).*(?:paquet|pack)|(?:paquet|pack).*(?:ouvrir|disponible)|nouveau (?:paquet|pack)/;
   const LABEL_TRIGGER = /etiquette|etiqueter|label|tag|classer/;
   const CONTINUE = /continuer|terminer|suivant|fermer|ajouter.*collection|collectionner|conserver/;
   const MORE_CARDS = /encore \d+ carte/;
