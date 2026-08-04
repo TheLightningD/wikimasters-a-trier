@@ -1,8 +1,26 @@
 const { chromium } = require('playwright-core');
 const path = require('node:path');
 
-const url = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
+const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
+
+async function automate(page, mode) {
+  await page.evaluate(value => { document.documentElement.dataset.wmMode = value; }, mode);
+  await page.addScriptTag({ path: path.join(__dirname, 'content.js') });
+  await page.waitForSelector('#wm-tri-start', { timeout: 5000 });
+  await page.evaluate(() => {
+    window.__wmDoneResult = null;
+    document.addEventListener('wm-tri-finished', event => { window.__wmDoneResult = event.detail; }, { once: true });
+  });
+  await page.click('#wm-tri-start');
+  await page.waitForFunction(() => window.__wmDoneResult !== null, null, { timeout: 180000 });
+  const result = await page.evaluate(() => ({
+    stats: window.__wmDoneResult,
+    status: document.querySelector('#wm-tri-status')?.textContent || ''
+  }));
+  if (/introuvable|delai depasse|délai dépassé/i.test(result.status)) throw new Error(result.status);
+  return result;
+}
 
 (async () => {
   const browser = await chromium.launch({
@@ -13,8 +31,7 @@ const executablePath = process.env.CHROME_PATH;
   const page = await browser.newPage({ locale: 'fr-FR' });
 
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
+    await page.goto(pullsUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const email = page.getByLabel(/adresse courriel|e-?mail/i);
     if (await email.isVisible().catch(() => false)) {
       if (!process.env.WIKIMASTERS_EMAIL || !process.env.WIKIMASTERS_PASSWORD) {
@@ -25,26 +42,24 @@ const executablePath = process.env.CHROME_PATH;
       await page.getByRole('button', { name: /connexion|se connecter/i }).click();
       await page.waitForURL(/\/pulls(?:[/?#]|$)/, { timeout: 20000 });
     }
-
     if (!page.url().includes('/pulls') && !process.env.WM_URL) {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(pullsUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     }
 
-    await page.addScriptTag({ path: path.join(__dirname, 'content.js') });
-    await page.waitForSelector('#wm-tri-start', { timeout: 5000 });
-    await page.evaluate(() => {
-      window.__wmDoneResult = null;
-      document.addEventListener('wm-tri-finished', event => { window.__wmDoneResult = event.detail; }, { once: true });
-    });
-    await page.click('#wm-tri-start');
-    await page.waitForFunction(() => window.__wmDoneResult !== null, null, { timeout: 180000 });
+    const discoveredCollectionUrl = process.env.WM_COLLECTION_URL || await page.locator('a[href]').evaluateAll(links => {
+      const link = links.find(item => /collection|mes cartes/i.test(`${item.textContent} ${item.getAttribute('aria-label') || ''}`));
+      return link?.href || '';
+    }) || new URL('/collection', pullsUrl).href;
 
-    const result = await page.evaluate(() => ({
-      stats: window.__wmDoneResult,
-      status: document.querySelector('#wm-tri-status')?.textContent || ''
-    }));
-    if (/introuvable|delai depasse|délai dépassé/i.test(result.status)) throw new Error(result.status);
-    console.log(JSON.stringify(result));
+    const pulls = await automate(page, 'pulls');
+    let collection = null;
+    if (process.env.SCAN_COLLECTION === 'true') {
+      const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
+      collection = await automate(page, 'collection');
+    }
+
+    console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats } : {}) }));
   } finally {
     await browser.close();
   }

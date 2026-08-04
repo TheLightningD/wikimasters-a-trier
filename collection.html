@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr" data-wm-test="1" data-wm-mode="collection">
+<head><meta charset="utf-8"></head>
+<body>
+  <h1>Ma collection</h1>
+  <main>
+    <article class="card"><strong>Sans étiquette 1</strong><button aria-label="Gérer les étiquettes">Étiquettes</button></article>
+    <article class="card"><strong>Déjà classée</strong><span class="badge">favori</span><button aria-label="Gérer les étiquettes">Étiquettes</button></article>
+    <article class="card"><strong>Sans étiquette 2</strong><button aria-label="Gérer les étiquettes">Étiquettes</button></article>
+  </main>
+  <script>
+    document.addEventListener('click', event => {
+      if (!event.target.matches('[aria-label="Gérer les étiquettes"]')) return;
+      const card = event.target.closest('article');
+      const dialog = document.createElement('dialog');
+      dialog.setAttribute('role', 'dialog');
+      dialog.innerHTML = '<button role="option">À trier</button>';
+      document.body.append(dialog);
+      dialog.showModal();
+      dialog.querySelector('button').onclick = () => {
+        card.insertAdjacentHTML('beforeend', '<span class="badge">à trier</span>');
+        dialog.close(); dialog.remove();
+      };
+    });
+  </script>
+</body>
+</html>

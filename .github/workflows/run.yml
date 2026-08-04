@@ -3,6 +3,7 @@ name: WikiMasters — ouvrir et étiqueter
 on:
   schedule:
     - cron: "*/10 * * * *"
+    - cron: "7 */6 * * *"
     - cron: "17 3 1 * *"
   workflow_dispatch:
 
@@ -30,6 +31,7 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
           WIKIMASTERS_EMAIL: ${{ secrets.WIKIMASTERS_EMAIL }}
           WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
+          SCAN_COLLECTION: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '7 */6 * * *' }}
 
   keepalive:
     if: github.event.schedule == '17 3 1 * *'

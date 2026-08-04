@@ -24,6 +24,7 @@
   const LABEL_TRIGGER = /etiquette|etiqueter|label|tag|classer/;
   const CONTINUE = /continuer|terminer|suivant|fermer|ajouter.*collection|collectionner|conserver/;
   const DANGER = /acheter|paiement|vendre|supprimer|echanger/;
+  const COLLECTION = document.documentElement.dataset.wmMode === "collection";
 
   const state = window.__WM_TRI__ = {
     running: false,
@@ -63,6 +64,23 @@
     return !!popup || ["option", "menuitem", "checkbox"].includes(role);
   });
 
+  async function applyLabel(trigger, strict = false) {
+    state.used.add(trigger);
+    trigger.click();
+    const option = await waitFor(targetOption, 2500);
+    if (!option) {
+      if (strict) throw new Error("Option « à trier » introuvable");
+      return true;
+    }
+    if (option.getAttribute("aria-selected") !== "true" && option.getAttribute("aria-checked") !== "true") {
+      option.click();
+      state.stats.cards++;
+      report("Étiquette ajoutée");
+    }
+    await sleep(300);
+    return true;
+  }
+
   async function labelOne() {
     let option = targetOption();
     if (option) {
@@ -76,17 +94,42 @@
 
     const trigger = find(LABEL_TRIGGER, true);
     if (!trigger || DANGER.test(label(trigger))) return false;
-    state.used.add(trigger);
-    trigger.click();
-    option = await waitFor(targetOption, 2500);
-    if (!option) return true;
-    if (option.getAttribute("aria-selected") !== "true" && option.getAttribute("aria-checked") !== "true") {
-      option.click();
-      state.stats.cards++;
-      report("Étiquette ajoutée");
+    return applyLabel(trigger);
+  }
+
+  const cardOf = trigger => trigger.closest('[data-card-id],[data-testid*="card"],article,li') || trigger.parentElement;
+  const hasAnyLabel = (card, trigger) => [...card.querySelectorAll('[data-label-id],[data-testid*="label"],[data-testid*="tag"],[class*="badge"],[class*="chip"],[class~="tag"]')]
+    .some(el => el !== trigger && !el.contains(trigger) && visible(el));
+
+  async function processCollection() {
+    const deadline = Date.now() + 120000;
+    let stable = 0;
+    let height = 0;
+    while (state.running && Date.now() < deadline && stable < 2) {
+      let changed = false;
+      const triggers = controls().filter(el => LABEL_TRIGGER.test(label(el)) && !state.used.has(el) && !DANGER.test(label(el)));
+      for (const trigger of triggers) {
+        state.used.add(trigger);
+        const card = cardOf(trigger);
+        if (!card || hasAnyLabel(card, trigger)) continue;
+        const before = state.stats.cards;
+        await applyLabel(trigger, true);
+        changed ||= state.stats.cards > before;
+      }
+      const more = find(/charger plus|voir plus|afficher plus/, true);
+      if (more) {
+        state.used.add(more);
+        more.click();
+        changed = true;
+      }
+      const nextHeight = document.documentElement.scrollHeight;
+      window.scrollTo(0, nextHeight);
+      await sleep(700);
+      stable = changed || nextHeight !== height ? 0 : stable + 1;
+      height = nextHeight;
     }
-    await sleep(300);
-    return true;
+    if (Date.now() >= deadline) throw new Error("Délai dépassé pendant le contrôle de la collection");
+    report("Collection vérifiée");
   }
 
   async function processPack(packButton) {
@@ -133,12 +176,16 @@
     state.used = new WeakSet();
     setRunning(true);
     try {
-      while (state.running) {
-        const pack = find(PACK);
-        if (!pack || DANGER.test(label(pack))) break;
-        await processPack(pack);
+      if (COLLECTION) {
+        await processCollection();
+      } else {
+        while (state.running) {
+          const pack = find(PACK);
+          if (!pack || DANGER.test(label(pack))) break;
+          await processPack(pack);
+        }
+        if (state.running) report(state.stats.packs ? "Terminé" : "Aucun nouveau pack trouvé");
       }
-      if (state.running) report(state.stats.packs ? "Terminé" : "Aucun nouveau pack trouvé");
     } catch (error) {
       report(error.message);
     } finally {
