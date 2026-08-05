@@ -12,23 +12,44 @@
     <div class="relative isolate group" data-case="target-other"><div class="cursor-pointer"><strong>Classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
     <div class="relative isolate group" data-case="target-others"><div class="cursor-pointer"><strong>Multi-classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span><span class="rounded-full">rare</span></div><span class="selection-indicator"></span></div>
   </main>
+  <button id="next" hidden>Suivant</button>
   <footer hidden>
     <button id="all">Tout sélectionner (page)</button>
     <button id="tag" disabled>Étiqueter</button>
   </footer>
   <script>
     const cards = [...document.querySelectorAll('.relative.isolate.group')];
+    const allLabeled = new URLSearchParams(location.search).has('all-labeled');
+    if (allLabeled) cards.filter(card => !card.querySelector('.rounded-full')).forEach(card => card.querySelector('.cursor-pointer').insertAdjacentHTML('beforeend', '<span class="rounded-full">favori</span>'));
     const cardList = document.querySelector('#cards');
     cards.forEach(card => card.remove());
     setTimeout(() => cardList.append(...cards), 800);
     const tag = document.querySelector('#tag');
     const refresh = () => { tag.disabled = !cards.some(card => card.dataset.selected === 'true'); };
     document.querySelector('#select').onclick = () => {
+      if (/Quitter/.test(document.querySelector('#select').textContent)) {
+        document.querySelector('footer').hidden = true;
+        document.querySelector('#select').textContent = 'Sélectionner';
+        return;
+      }
       setTimeout(() => {
         document.querySelector('footer').hidden = false;
         document.querySelector('#select').textContent = 'Quitter la sélection';
       }, 800);
     };
+    if (allLabeled) {
+      const next = document.querySelector('#next');
+      next.hidden = false;
+      next.onclick = () => {
+        if (!document.querySelector('footer').hidden) {
+          document.querySelector('footer').hidden = true;
+          document.querySelector('#select').textContent = 'Sélectionner';
+          return;
+        }
+        cardList.prepend(cards[1]);
+        next.disabled = true;
+      };
+    }
     const labels = card => [...card.querySelectorAll('.rounded-full')].map(item => item.textContent.trim());
     window.__cleanupSnapshot = () => Object.fromEntries(cards.filter(card => card.dataset.case).map(card => [card.dataset.case, labels(card)]));
     cards.forEach(card => card.querySelector('.cursor-pointer').onclick = () => {

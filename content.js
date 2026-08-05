@@ -133,26 +133,28 @@
   }
 
   async function processCollection() {
-    const enter = await waitFor(() => find(/^selectionner$/, true), 5000);
-    if (!enter) throw new Error("Bouton « Sélectionner » introuvable");
-    enter.click();
-    if (!await waitFor(() => find(/^quitter la selection$/), 3000)) {
-      throw new Error("Le mode de sélection ne s'active pas");
-    }
-
     for (let page = 0; page < 100; page++) {
       const cards = await waitForCollectionCards();
       if (!cards?.length) throw new Error("Cartes de collection introuvables");
 
       const unlabelled = cards.filter(card => !card.querySelector('span.rounded-full'));
-      for (const card of unlabelled) {
-        const selector = card.querySelector('.cursor-pointer');
-        if (!selector) throw new Error("Zone de sélection de carte introuvable");
-        selector.click();
-        await sleep(30);
-      }
-
       if (unlabelled.length) {
+        const indexes = unlabelled.map(card => cards.indexOf(card));
+        const enter = await waitFor(() => find(/^selectionner$/, true), 5000);
+        if (!enter) throw new Error("Bouton « Sélectionner » introuvable");
+        enter.click();
+        if (!await waitFor(() => find(/^quitter la selection$/), 3000)) {
+          throw new Error("Le mode de sélection ne s'active pas");
+        }
+        const selectableCards = await waitForCollectionCards();
+        for (const index of indexes) {
+          const card = selectableCards[index];
+          const selector = card.querySelector('.cursor-pointer');
+          if (!selector) throw new Error("Zone de sélection de carte introuvable");
+          selector.click();
+          await sleep(30);
+        }
+
         const tag = await waitFor(() => find(/^etiqueter$/, true), 2000);
         if (!tag) throw new Error("Bouton « Étiqueter » introuvable");
         tag.click();
@@ -173,6 +175,12 @@
         done.click();
         await sleep(300);
         state.stats.cards += completion;
+
+        const leave = await waitFor(() => find(/^quitter la selection$/), 1000);
+        if (leave) {
+          leave.click();
+          if (!await waitFor(() => find(/^selectionner$/), 3000)) throw new Error("Le mode de sélection ne se ferme pas");
+        }
       }
 
       const next = controls().find(el => /^suivant/.test(norm(label(el))) && visible(el) && !el.disabled);
