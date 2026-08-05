@@ -236,12 +236,22 @@
       report("Limite quotidienne de paquets atteinte");
       return false;
     }
-    state.stats.packs++;
-    report("Pack ouvert");
     const deadline = Date.now() + 45000;
+    let opened = false;
 
     while (state.running && Date.now() < deadline) {
-      if (!await openCardDetails()) throw new Error("Pack ouvert, mais commande d’étiquette introuvable");
+      if (!await openCardDetails()) {
+        if (DAILY_LIMIT.test(norm(document.body.innerText))) {
+          report("Limite quotidienne de paquets atteinte");
+          return false;
+        }
+        throw new Error("Pack ouvert, mais commande d’étiquette introuvable");
+      }
+      if (!opened) {
+        state.stats.packs++;
+        report("Pack ouvert");
+        opened = true;
+      }
       const action = await labelOne();
       if (!action) throw new Error("Pack ouvert, mais commande d’étiquette introuvable");
 
