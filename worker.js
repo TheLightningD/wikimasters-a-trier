@@ -19,9 +19,10 @@ async function automate(page, mode) {
     stats: window.__wmDoneResult,
     status: document.querySelector('#wm-tri-status')?.textContent || '',
     logs: window.__WM_TRI__?.logs || [],
-    testVerified: window.__verifiedCount
+    testVerified: window.__verifiedCount,
+    testCleanup: window.__cleanupSnapshot?.()
   }));
-  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée/i.test(result.status)) {
+  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée|Nettoyage terminé/i.test(result.status)) {
     throw new Error(`${result.status} · ${result.logs.join(' > ')}`);
   }
   return result;
@@ -66,13 +67,16 @@ async function automate(page, mode) {
       console.log(JSON.stringify({ pullControls }));
     }
     let collection = null;
+    let cleanup = null;
     if (process.env.SCAN_COLLECTION === 'true') {
       const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
       collection = await automate(page, 'collection');
+      await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      cleanup = await automate(page, 'cleanup');
     }
 
-    console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats } : {}) }));
+    console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats, cleanup: cleanup.stats, testCleanup: cleanup.testCleanup } : {}) }));
   } catch (error) {
     await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
     await page.content().then(html => fs.writeFileSync('failure.html', html)).catch(() => {});

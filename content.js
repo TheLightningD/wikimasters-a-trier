@@ -24,7 +24,9 @@
   const CONTINUE = /continuer|terminer|suivant|ajouter.*collection|collectionner|conserver/;
   const MORE_CARDS = /encore \d+ carte/;
   const DANGER = /acheter|paiement|vendre|supprimer|echanger/;
-  const COLLECTION = document.documentElement.dataset.wmMode === "collection";
+  const MODE = document.documentElement.dataset.wmMode;
+  const COLLECTION = MODE === "collection";
+  const CLEANUP = MODE === "cleanup";
 
   const state = window.__WM_TRI__ = {
     running: false,
@@ -58,7 +60,9 @@
   };
 
   const targetOption = () => controls().find(el => el.matches('button,[role="button"]') && label(el) === "a trier");
-  const hasTargetLabel = () => controls().some(el => /retirer.*etiquette.*a trier/.test(label(el)));
+  const targetRemoval = () => controls().find(el => /retirer.*etiquette.*a trier/.test(label(el)));
+  const hasTargetLabel = () => !!targetRemoval();
+  const cardLabels = card => [...card.querySelectorAll('span.rounded-full')].map(item => norm(item.textContent));
 
   async function applyLabel(trigger, strict = false) {
     state.used.add(trigger);
@@ -179,6 +183,47 @@
     report("Collection vérifiée");
   }
 
+  async function processCleanup() {
+    for (let page = 0; page < 100; page++) {
+      const cards = [...document.querySelectorAll('.relative.isolate.group')];
+      if (!cards.length) throw new Error("Cartes de collection introuvables");
+
+      for (let index = 0; index < cards.length; index++) {
+        const labels = cardLabels(cards[index]);
+        const others = labels.filter(value => value !== "a trier");
+        if (!labels.includes("a trier") || !others.length) continue;
+
+        const selector = cards[index].querySelector('.cursor-pointer');
+        if (!selector) throw new Error("Zone d'ouverture de carte introuvable");
+        selector.click();
+        const remove = await waitFor(targetRemoval, 2500);
+        if (!remove) throw new Error("Commande de retrait « à trier » introuvable");
+        remove.click();
+        await sleep(300);
+        await closeCardDetails();
+
+        const confirmed = await waitFor(() => {
+          const current = [...document.querySelectorAll('.relative.isolate.group')][index];
+          const currentLabels = current ? cardLabels(current) : [];
+          return !currentLabels.includes("a trier") && others.every(value => currentLabels.includes(value));
+        }, 2500);
+        if (!confirmed) throw new Error("Retrait « à trier » non confirmé ou autre étiquette modifiée");
+        state.stats.cards++;
+        report("Étiquette « à trier » retirée");
+      }
+
+      const next = controls().find(el => /^suivant/.test(label(el)) && visible(el));
+      if (!next) break;
+      const first = cards[0];
+      next.click();
+      if (!await waitFor(() => document.querySelector('.relative.isolate.group') !== first, 5000)) {
+        throw new Error("La page suivante de la collection ne charge pas");
+      }
+      await sleep(200);
+    }
+    report("Nettoyage terminé");
+  }
+
   async function processPack(packButton) {
     packButton.click();
     state.stats.packs++;
@@ -232,6 +277,8 @@
     try {
       if (COLLECTION) {
         await processCollection();
+      } else if (CLEANUP) {
+        await processCleanup();
       } else {
         while (state.running) {
           const pack = await waitFor(() => find(PACK), state.stats.packs ? 2000 : 10000);

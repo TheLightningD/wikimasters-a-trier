@@ -6,8 +6,11 @@
   <button id="select">Sélectionner</button>
   <main id="cards">
     <div class="relative isolate group"><div class="cursor-pointer"><strong>Sans étiquette 1</strong></div><span class="selection-indicator"></span></div>
-    <div class="relative isolate group"><div class="cursor-pointer"><strong>Déjà classée</strong><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group" data-case="other-only"><div class="cursor-pointer"><strong>Déjà classée</strong><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
     <div class="relative isolate group"><div class="cursor-pointer"><strong>Sans étiquette 2</strong></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group" data-case="target-only"><div class="cursor-pointer"><strong>À trier seulement</strong><span class="rounded-full">à trier</span></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group" data-case="target-other"><div class="cursor-pointer"><strong>Classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group" data-case="target-others"><div class="cursor-pointer"><strong>Multi-classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span><span class="rounded-full">rare</span></div><span class="selection-indicator"></span></div>
   </main>
   <footer hidden>
     <button id="all">Tout sélectionner (page)</button>
@@ -21,7 +24,22 @@
       document.querySelector('footer').hidden = false;
       document.querySelector('#select').textContent = 'Quitter la sélection';
     };
+    const labels = card => [...card.querySelectorAll('.rounded-full')].map(item => item.textContent.trim());
+    window.__cleanupSnapshot = () => Object.fromEntries(cards.filter(card => card.dataset.case).map(card => [card.dataset.case, labels(card)]));
     cards.forEach(card => card.querySelector('.cursor-pointer').onclick = () => {
+      if (document.documentElement.dataset.wmMode === 'cleanup') {
+        const modal = document.createElement('div');
+        modal.className = 'details';
+        modal.innerHTML = `${labels(card).map(value => `<button aria-label="Retirer l'étiquette ${value}">${value}</button>`).join('')}<button aria-label="Fermer">×</button>`;
+        document.body.append(modal);
+        modal.querySelectorAll('button')[labels(card).findIndex(value => value === 'à trier')]?.addEventListener('click', event => {
+          if (new URLSearchParams(location.search).has('failure') && card.dataset.case === 'target-other') return;
+          card.querySelectorAll('.rounded-full').forEach(item => { if (item.textContent.trim() === 'à trier') item.remove(); });
+          event.currentTarget.remove();
+        });
+        modal.querySelector('[aria-label="Fermer"]').onclick = () => modal.remove();
+        return;
+      }
       card.dataset.selected = card.dataset.selected === 'true' ? 'false' : 'true';
       refresh();
     });
