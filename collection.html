@@ -18,6 +18,9 @@
   </footer>
   <script>
     const cards = [...document.querySelectorAll('.relative.isolate.group')];
+    const cardList = document.querySelector('#cards');
+    cards.forEach(card => card.remove());
+    setTimeout(() => cardList.append(...cards), 800);
     const tag = document.querySelector('#tag');
     const refresh = () => { tag.disabled = !cards.some(card => card.dataset.selected === 'true'); };
     document.querySelector('#select').onclick = () => {

@@ -63,6 +63,8 @@
   const targetRemoval = () => controls().find(el => /retirer.*etiquette.*a trier/.test(label(el)));
   const hasTargetLabel = () => !!targetRemoval();
   const cardLabels = card => [...card.querySelectorAll('span.rounded-full')].map(item => norm(item.textContent));
+  const collectionCards = () => [...document.querySelectorAll('.relative.isolate.group')];
+  const waitForCollectionCards = () => waitFor(() => collectionCards().length ? collectionCards() : null, 10000);
 
   async function applyLabel(trigger, strict = false) {
     state.used.add(trigger);
@@ -136,8 +138,8 @@
     await sleep(300);
 
     for (let page = 0; page < 100; page++) {
-      const cards = [...document.querySelectorAll('.relative.isolate.group')];
-      if (!cards.length) throw new Error("Cartes de collection introuvables");
+      const cards = await waitForCollectionCards();
+      if (!cards?.length) throw new Error("Cartes de collection introuvables");
 
       const unlabelled = cards.filter(card => !card.querySelector('span.rounded-full'));
       for (const card of unlabelled) {
@@ -185,8 +187,8 @@
 
   async function processCleanup() {
     for (let page = 0; page < 100; page++) {
-      const cards = [...document.querySelectorAll('.relative.isolate.group')];
-      if (!cards.length) throw new Error("Cartes de collection introuvables");
+      const cards = await waitForCollectionCards();
+      if (!cards?.length) throw new Error("Cartes de collection introuvables");
 
       for (let index = 0; index < cards.length; index++) {
         const labels = cardLabels(cards[index]);
