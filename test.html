@@ -15,6 +15,7 @@
     const app = document.querySelector('#app');
     let pack = 0;
     let card = 0;
+    const dailyLimit = new URLSearchParams(location.search).has('limit');
     const tagged = Array(6).fill(false);
     window.__verifiedCount = 0;
 
@@ -62,7 +63,7 @@
     const showPack = () => {
       if (pack >= 2) { app.innerHTML = '<p>Tous les packs sont ouverts.</p>'; return; }
       app.innerHTML = '<button id="open">Ouvrir</button>';
-      document.querySelector('#open').onclick = showCard;
+      document.querySelector('#open').onclick = dailyLimit && pack ? () => { app.innerHTML = '<p>Limite quotidienne de paquets atteinte.</p>'; } : showCard;
     };
 
     setTimeout(showPack, 300);

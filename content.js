@@ -24,6 +24,7 @@
   const CONTINUE = /continuer|terminer|suivant|ajouter.*collection|collectionner|conserver/;
   const MORE_CARDS = /encore \d+ carte/;
   const DANGER = /acheter|paiement|vendre|supprimer|echanger/;
+  const DAILY_LIMIT = /limite quotidienne de paquets atteinte/;
   const MODE = document.documentElement.dataset.wmMode;
   const COLLECTION = MODE === "collection";
   const CLEANUP = MODE === "cleanup";
@@ -230,9 +231,13 @@
 
   async function processPack(packButton) {
     packButton.click();
+    await sleep(600);
+    if (DAILY_LIMIT.test(norm(document.body.innerText))) {
+      report("Limite quotidienne de paquets atteinte");
+      return false;
+    }
     state.stats.packs++;
     report("Pack ouvert");
-    await sleep(600);
     const deadline = Date.now() + 45000;
 
     while (state.running && Date.now() < deadline) {
@@ -267,7 +272,7 @@
       if (!done) throw new Error("Pack étiqueté, mais bouton de fin introuvable");
       done.click();
       await sleep(600);
-      return;
+      return true;
     }
     if (state.running) throw new Error("Délai dépassé pendant le traitement du pack");
   }
@@ -287,7 +292,7 @@
         while (state.running) {
           const pack = await waitFor(() => find(PACK), state.stats.packs ? 2000 : 10000);
           if (!pack || DANGER.test(label(pack))) break;
-          await processPack(pack);
+          if (!await processPack(pack)) break;
         }
         if (state.running) report(state.stats.packs ? "Terminé" : "Aucun nouveau pack trouvé");
       }
