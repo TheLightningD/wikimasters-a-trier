@@ -66,6 +66,19 @@
   const cardLabels = card => [...card.querySelectorAll('span.rounded-full')].map(item => norm(item.textContent));
   const collectionCards = () => [...document.querySelectorAll('.relative.isolate.group')];
   const waitForCollectionCards = () => waitFor(() => collectionCards().length ? collectionCards() : null, 10000);
+  const nextCollectionPage = async cards => {
+    const nextButtons = controls().filter(el => /^suivant/.test(label(el)) && !el.disabled);
+    if (!nextButtons.length) return false;
+    const first = cards[0];
+    for (const next of nextButtons) {
+      next.click();
+      if (await waitFor(() => collectionCards()[0] !== first, 2500)) {
+        await sleep(200);
+        return true;
+      }
+    }
+    throw new Error("La page suivante de la collection ne charge pas");
+  };
 
   async function applyLabel(trigger, strict = false) {
     state.used.add(trigger);
@@ -183,14 +196,7 @@
         }
       }
 
-      const next = controls().find(el => /^suivant/.test(norm(label(el))) && visible(el) && !el.disabled);
-      if (!next) break;
-      const first = cards[0];
-      next.click();
-      if (!await waitFor(() => document.querySelector('.relative.isolate.group') !== first, 5000)) {
-        throw new Error("La page suivante de la collection ne charge pas");
-      }
-      await sleep(200);
+      if (!await nextCollectionPage(cards)) break;
     }
 
     report("Collection vérifiée");
@@ -225,14 +231,7 @@
         report("Étiquette « à trier » retirée");
       }
 
-      const next = controls().find(el => /^suivant/.test(label(el)) && visible(el));
-      if (!next) break;
-      const first = cards[0];
-      next.click();
-      if (!await waitFor(() => document.querySelector('.relative.isolate.group') !== first, 5000)) {
-        throw new Error("La page suivante de la collection ne charge pas");
-      }
-      await sleep(200);
+      if (!await nextCollectionPage(cards)) break;
     }
     report("Nettoyage terminé");
   }

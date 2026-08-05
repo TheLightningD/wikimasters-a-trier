@@ -12,7 +12,7 @@
     <div class="relative isolate group" data-case="target-other"><div class="cursor-pointer"><strong>Classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
     <div class="relative isolate group" data-case="target-others"><div class="cursor-pointer"><strong>Multi-classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span><span class="rounded-full">rare</span></div><span class="selection-indicator"></span></div>
   </main>
-  <button id="next" hidden>Suivant</button>
+  <button id="next-decoy" hidden>Suivant</button><button id="next" hidden>Suivant</button>
   <footer hidden>
     <button id="all">Tout sélectionner (page)</button>
     <button id="tag" disabled>Étiqueter</button>
@@ -39,6 +39,7 @@
     };
     if (allLabeled) {
       const next = document.querySelector('#next');
+      document.querySelector('#next-decoy').hidden = false;
       next.hidden = false;
       next.onclick = () => {
         if (!document.querySelector('footer').hidden) {
@@ -47,6 +48,7 @@
           return;
         }
         cardList.prepend(cards[1]);
+        document.querySelector('#next-decoy').disabled = true;
         next.disabled = true;
       };
     }
