@@ -68,15 +68,18 @@ async function automate(page, mode) {
     }
     let collection = null;
     let cleanup = null;
-    if (process.env.SCAN_COLLECTION === 'true') {
+    const scanCollection = process.env.SCAN_COLLECTION === 'true';
+    if (scanCollection) {
       const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
       collection = await automate(page, 'collection');
+    }
+    if (scanCollection || pulls.stats.packs) {
       await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       cleanup = await automate(page, 'cleanup');
     }
 
-    console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats, cleanup: cleanup.stats, testCleanup: cleanup.testCleanup } : {}) }));
+    console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats } : {}), ...(cleanup ? { cleanup: cleanup.stats, testCleanup: cleanup.testCleanup } : {}) }));
   } catch (error) {
     await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
     await page.content().then(html => fs.writeFileSync('failure.html', html)).catch(() => {});

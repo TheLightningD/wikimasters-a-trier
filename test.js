@@ -32,10 +32,11 @@ server.listen(0, '127.0.0.1', async () => {
   });
 
   const success = await run();
+  const automatic = await run({ SCAN_COLLECTION: 'false' });
   const failure = await run({ COLLECTION_ONLY: 'true', WM_COLLECTION_URL: `http://127.0.0.1:${port}/collection.html?failure=1` });
   server.close();
-  if (success.code !== 0 || !success.output.includes('"packs":2') || !success.output.includes('"collection":{"packs":0,"cards":2}') || !success.output.includes('"cleanup":{"packs":0,"cards":2}') || !success.output.includes('"target-only":["à trier"]') || !success.output.includes('"target-other":["favori"]') || !success.output.includes('"target-others":["favori","rare"]') || !success.output.includes('"other-only":["favori"]') || !success.output.includes('"testVerified":6') || failure.code === 0 || !failure.output.includes('Retrait « à trier » non confirmé')) {
-    console.error(success.output.trim(), failure.output.trim());
+  if (success.code !== 0 || !success.output.includes('"packs":2') || !success.output.includes('"collection":{"packs":0,"cards":2}') || !success.output.includes('"cleanup":{"packs":0,"cards":2}') || !success.output.includes('"target-only":["à trier"]') || !success.output.includes('"target-other":["favori"]') || !success.output.includes('"target-others":["favori","rare"]') || !success.output.includes('"other-only":["favori"]') || !success.output.includes('"testVerified":6') || automatic.code !== 0 || !automatic.output.includes('"packs":2,"cards":6') || !automatic.output.includes('"cleanup":{"packs":0,"cards":2}') || failure.code === 0 || !failure.output.includes('Retrait « à trier » non confirmé')) {
+    console.error(success.output.trim(), automatic.output.trim(), failure.output.trim());
     process.exit(1);
   }
   console.log(success.output.trim());
