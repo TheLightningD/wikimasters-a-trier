@@ -16,6 +16,7 @@
     let pack = 0;
     let card = 0;
     const dailyLimit = new URLSearchParams(location.search).has('limit');
+    const pullError = new URLSearchParams(location.search).has('pull-error');
     const tagged = Array(6).fill(false);
     window.__verifiedCount = 0;
 
@@ -63,7 +64,7 @@
     const showPack = () => {
       if (pack >= 2) { app.innerHTML = '<p>Tous les packs sont ouverts.</p>'; return; }
       app.innerHTML = '<button id="open">Ouvrir</button>';
-      document.querySelector('#open').onclick = dailyLimit && pack ? () => { setTimeout(() => { app.innerHTML = '<p>Limite quotidienne de paquets atteinte.</p>'; }, 1000); } : showCard;
+      document.querySelector('#open').onclick = pullError && pack ? () => { app.innerHTML = '<p>Erreur technique pendant l’ouverture.</p>'; } : dailyLimit && pack ? () => { setTimeout(() => { app.innerHTML = '<p>Limite quotidienne de paquets atteinte.</p>'; }, 1000); } : showCard;
     };
 
     setTimeout(showPack, 300);

@@ -23,7 +23,9 @@ async function automate(page, mode) {
     testCleanup: window.__cleanupSnapshot?.()
   }));
   if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée|Nettoyage terminé/i.test(result.status)) {
-    throw new Error(`${result.status} · ${result.logs.join(' > ')}`);
+    const error = new Error(`${result.status}${result.logs.length ? ` · ${result.logs.join(' > ')}` : ''}`);
+    error.result = result;
+    throw error;
   }
   return result;
 }
@@ -58,9 +60,17 @@ async function automate(page, mode) {
     }) || new URL('/collection', pullsUrl).href;
 
     const collectionOnly = process.env.COLLECTION_ONLY === 'true';
-    const pulls = collectionOnly
-      ? { stats: { packs: 0, cards: 0 }, logs: ['Packs ignorés (collection uniquement)'] }
-      : await automate(page, 'pulls');
+    let pullsError = null;
+    let pulls = { stats: { packs: 0, cards: 0 }, logs: ['Packs ignorés (collection uniquement)'] };
+    if (!collectionOnly) {
+      try {
+        pulls = await automate(page, 'pulls');
+      } catch (error) {
+        if (!error.result) throw error;
+        pulls = error.result;
+        pullsError = error;
+      }
+    }
     console.log(JSON.stringify({ pulls: pulls.stats, logs: pulls.logs, ...(pulls.testVerified === undefined ? {} : { testVerified: pulls.testVerified }) }));
     if (!collectionOnly && !pulls.stats.packs) {
       const pullControls = await page.locator('button,[role="button"]').evaluateAll(items => [...new Set(items.map(item => `${item.innerText || ''} ${item.getAttribute('aria-label') || ''}`.trim()).filter(Boolean))].slice(0, 20));
@@ -73,6 +83,7 @@ async function automate(page, mode) {
     const cleanup = await automate(page, 'cleanup');
 
     console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats } : {}), ...(cleanup ? { cleanup: cleanup.stats, testCleanup: cleanup.testCleanup } : {}) }));
+    if (pullsError) throw pullsError;
   } catch (error) {
     await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
     await page.content().then(html => fs.writeFileSync('failure.html', html)).catch(() => {});
