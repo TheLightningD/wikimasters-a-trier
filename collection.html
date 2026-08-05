@@ -24,8 +24,10 @@
     const tag = document.querySelector('#tag');
     const refresh = () => { tag.disabled = !cards.some(card => card.dataset.selected === 'true'); };
     document.querySelector('#select').onclick = () => {
-      document.querySelector('footer').hidden = false;
-      document.querySelector('#select').textContent = 'Quitter la sélection';
+      setTimeout(() => {
+        document.querySelector('footer').hidden = false;
+        document.querySelector('#select').textContent = 'Quitter la sélection';
+      }, 800);
     };
     const labels = card => [...card.querySelectorAll('.rounded-full')].map(item => item.textContent.trim());
     window.__cleanupSnapshot = () => Object.fromEntries(cards.filter(card => card.dataset.case).map(card => [card.dataset.case, labels(card)]));
@@ -43,6 +45,7 @@
         modal.querySelector('[aria-label="Fermer"]').onclick = () => modal.remove();
         return;
       }
+      if (document.querySelector('footer').hidden) return;
       card.dataset.selected = card.dataset.selected === 'true' ? 'false' : 'true';
       refresh();
     });

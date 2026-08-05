@@ -135,7 +135,9 @@
     const enter = await waitFor(() => find(/^selectionner$/, true), 5000);
     if (!enter) throw new Error("Bouton « Sélectionner » introuvable");
     enter.click();
-    await sleep(300);
+    if (!await waitFor(() => find(/^quitter la selection$/), 3000)) {
+      throw new Error("Le mode de sélection ne s'active pas");
+    }
 
     for (let page = 0; page < 100; page++) {
       const cards = await waitForCollectionCards();
