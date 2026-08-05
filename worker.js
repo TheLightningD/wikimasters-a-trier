@@ -66,18 +66,11 @@ async function automate(page, mode) {
       const pullControls = await page.locator('button,[role="button"]').evaluateAll(items => [...new Set(items.map(item => `${item.innerText || ''} ${item.getAttribute('aria-label') || ''}`.trim()).filter(Boolean))].slice(0, 20));
       console.log(JSON.stringify({ pullControls }));
     }
-    let collection = null;
-    let cleanup = null;
-    const scanCollection = process.env.SCAN_COLLECTION === 'true';
-    if (scanCollection) {
-      const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
-      collection = await automate(page, 'collection');
-    }
-    if (scanCollection || pulls.stats.packs) {
-      await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      cleanup = await automate(page, 'cleanup');
-    }
+    const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
+    const collection = await automate(page, 'collection');
+    await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const cleanup = await automate(page, 'cleanup');
 
     console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats } : {}), ...(cleanup ? { cleanup: cleanup.stats, testCleanup: cleanup.testCleanup } : {}) }));
   } catch (error) {
