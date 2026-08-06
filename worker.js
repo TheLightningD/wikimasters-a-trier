@@ -152,7 +152,7 @@ async function automate(page, mode, payload) {
           `| Mode | ${mode} |`,
           `| Pseudos | ${report.people} |`,
           `| Règles | ${report.rules} |`,
-          `| Cartes \`osef\` | ${report.cardsScanned} |`,
+          `| Cartes \`#Osef\` | ${report.cardsScanned} |`,
           `| Ajouts prévus | ${report.additions} |`,
           `| Retraits prévus | ${report.removals} |`,
           `| Règles ambiguës | ${report.ambiguousRules} |`,

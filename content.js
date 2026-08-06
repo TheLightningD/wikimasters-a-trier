@@ -30,6 +30,7 @@
   const CLEANUP = MODE === "cleanup";
   const INVENTORY = MODE === "inventory";
   const WISHLIST_APPLY = MODE === "wishlist-apply";
+  const SOURCE_LABEL = "#osef";
 
   const state = window.__WM_TRI__ = {
     running: false,
@@ -261,9 +262,9 @@
     for (;;) {
       const cards = await waitForCollectionCards();
       if (!cards?.length) throw new Error("Cartes de collection introuvables");
-      for (const card of cards.filter(item => cardLabels(item).includes("osef"))) {
+      for (const card of cards.filter(item => cardLabels(item).includes(SOURCE_LABEL))) {
         const title = cardTitle(card);
-        if (!title) throw new Error("Titre d'une carte « osef » introuvable");
+        if (!title) throw new Error("Titre d'une carte « #Osef » introuvable");
         const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
         const id = articleUrl ? `article:${articleUrl}` : `title:${norm(title)}`;
         if (inventory.has(id)) continue;
@@ -272,7 +273,7 @@
         selector.click();
         const exactLabels = await waitFor(() => {
           const values = detailLabels();
-          return values.some(value => norm(value) === "osef") ? values : null;
+          return values.some(value => norm(value) === SOURCE_LABEL) ? values : null;
         }, 3000);
         if (!exactLabels) throw new Error(`Étiquettes détaillées introuvables pour « ${title} »`);
         inventory.set(id, {
@@ -307,7 +308,7 @@
     if (!await waitFor(() => find(/^quitter la selection$/), 3000)) throw new Error("Le mode de sélection ne s'active pas");
     const selectable = await waitForCollectionCards();
     for (const index of indexes) {
-      if (!cardLabels(selectable[index]).includes("osef")) throw new Error("Carte sans étiquette « osef » refusée");
+      if (!cardLabels(selectable[index]).includes(SOURCE_LABEL)) throw new Error("Carte sans étiquette « #Osef » refusée");
       const selector = selectable[index].querySelector('.cursor-pointer');
       if (!selector) throw new Error("Zone de sélection de carte introuvable");
       selector.click();
@@ -362,11 +363,11 @@
       for (const item of plan.removals.filter(entry => ids.includes(entry.cardId))) {
         for (const index of ids.map((id, index) => id === item.cardId && !handledCards.has(cards[index]) ? index : -1).filter(index => index >= 0)) {
           seen.add(item.cardId);
-          if (!cardLabels(cards[index]).includes("osef")) throw new Error("Carte sans étiquette « osef » refusée");
+          if (!cardLabels(cards[index]).includes(SOURCE_LABEL)) throw new Error("Carte sans étiquette « #Osef » refusée");
           cards[index].querySelector('.cursor-pointer')?.click();
           const before = await waitFor(() => {
             const values = detailLabels();
-            return values.some(value => norm(value) === "osef") ? values : null;
+            return values.some(value => norm(value) === SOURCE_LABEL) ? values : null;
           }, 3000);
           if (!before) throw new Error("Étiquettes détaillées introuvables avant retrait");
           for (const name of item.labels) {

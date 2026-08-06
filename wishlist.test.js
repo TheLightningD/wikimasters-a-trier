@@ -31,7 +31,7 @@ assert.equal(parseRuleCell('Jeux vidéos Drapeaux Automobile', 'Sports / Culture
 const card = {
   id: 'title:canard colvert',
   title: 'Canard colvert',
-  labels: ['osef'],
+  labels: ['#Osef'],
   metadata: 'Le Canard colvert est une espèce d’oiseaux. Catégories: Oiseau, Anatidae.'
 };
 const wishes = [
@@ -64,11 +64,11 @@ await enrichCards([{ title: 'Canard colvert', metadata: '' }], async () => {
 });
 assert.equal(attempts, 2);
 
-const sync = buildSyncPlan([{ ...card, labels: ['osef', 'échange · Canard', 'échange · AncienPseudo'] }], wishes);
+const sync = buildSyncPlan([{ ...card, labels: ['#Osef', 'échange · Canard', 'échange · AncienPseudo'] }], wishes);
 assert.deepEqual(sync.additions, [{ cardId: card.id, labels: ["échange · zine'"] }]);
 assert.deepEqual(sync.removals, [{ cardId: card.id, labels: ['échange · AncienPseudo'] }]);
 assert.equal(sync.unchanged, 0);
-const converged = buildSyncPlan([{ ...card, labels: ['osef', 'échange · Canard', "échange · zine'"] }], wishes);
+const converged = buildSyncPlan([{ ...card, labels: ['#Osef', 'échange · Canard', "échange · zine'"] }], wishes);
 assert.deepEqual(converged.additions, []);
 assert.deepEqual(converged.removals, []);
 assert.equal(converged.unchanged, 1);
