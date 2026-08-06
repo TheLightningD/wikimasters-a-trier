@@ -264,6 +264,9 @@
       for (const card of cards.filter(item => cardLabels(item).includes("osef"))) {
         const title = cardTitle(card);
         if (!title) throw new Error("Titre d'une carte « osef » introuvable");
+        const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
+        const id = articleUrl ? `article:${articleUrl}` : `title:${norm(title)}`;
+        if (inventory.has(id)) continue;
         const selector = card.querySelector('.cursor-pointer');
         if (!selector) throw new Error("Zone d'ouverture de carte introuvable pour l'inventaire");
         selector.click();
@@ -272,8 +275,6 @@
           return values.some(value => norm(value) === "osef") ? values : null;
         }, 3000);
         if (!exactLabels) throw new Error(`Étiquettes détaillées introuvables pour « ${title} »`);
-        const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
-        const id = articleUrl ? `article:${articleUrl}` : `title:${norm(title)}`;
         inventory.set(id, {
           id,
           title,
