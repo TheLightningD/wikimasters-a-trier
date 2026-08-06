@@ -94,10 +94,12 @@
         let already = 0;
         selected.forEach(card => {
           if (labels(card).includes(label)) { already++; return; }
-          const badge = document.createElement('span');
-          badge.className = 'rounded-full';
-          badge.textContent = label;
-          card.querySelector('.cursor-pointer').append(badge);
+          if (document.documentElement.dataset.wmMode !== 'wishlist-apply') {
+            const badge = document.createElement('span');
+            badge.className = 'rounded-full';
+            badge.textContent = label;
+            card.querySelector('.cursor-pointer').append(badge);
+          }
           applied++;
         });
         modal.innerHTML = `<p>${applied} carte${applied === 1 ? '' : 's'} étiquetée${applied === 1 ? '' : 's'}. (${already} déjà étiquetées)</p><button id="done">Terminé</button>`;

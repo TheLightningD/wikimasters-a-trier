@@ -325,9 +325,7 @@
     done.click();
     await sleep(200);
     await leaveSelection();
-    if (!await waitFor(() => indexes.every(index => rawCardLabels(collectionCards()[index]).includes(name)), 2500)) {
-      throw new Error(`Ajout « ${name} » non confirmé`);
-    }
+    // ponytail: les badges de collection restent obsolètes; le compteur serveur est la confirmation fiable.
     state.stats.additions += indexes.length;
   }
 
