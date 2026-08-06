@@ -10,6 +10,34 @@ function parseGviz(body) {
 }
 
 const value = (row, index) => String(row?.c?.[index]?.v ?? '').trim();
+const STOP_WORDS = new Set(['d', 'de', 'des', 'du', 'et', 'l', 'la', 'le', 'les', 'un', 'une']);
+
+function normalizeTerm(input) {
+  return String(input || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/['’]/g, ' ').replace(/[^a-z0-9+]+/g, ' ').trim().split(/\s+/)
+    .filter(token => token && !STOP_WORDS.has(token))
+    .map(token => token.length >= 5 && /[sx]$/.test(token) ? token.slice(0, -1) : token)
+    .join(' ');
+}
+
+function parseRuleCell(raw, category) {
+  const hasSeparator = /[\n,/]/.test(raw);
+  const include = [];
+  const exclude = [];
+  for (const part of String(raw).split(/[\n,/]+/)) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const negative = /^(?:pas de|sans|sauf)\s+/i.test(trimmed);
+    const term = normalizeTerm(trimmed.replace(/^(?:pas de|sans|sauf)\s+/i, ''));
+    if (term) (negative ? exclude : include).push(term);
+  }
+  return {
+    category,
+    include,
+    exclude,
+    ambiguous: !hasSeparator && normalizeTerm(raw).split(' ').filter(Boolean).length >= 4
+  };
+}
 
 function parseWishlists(table) {
   const rows = table.rows;
@@ -36,4 +64,4 @@ async function fetchWishlists(fetchImpl = fetch) {
   return parseWishlists(parseGviz(await response.text()));
 }
 
-module.exports = { SHEET_URL, parseGviz, parseWishlists, fetchWishlists };
+module.exports = { SHEET_URL, parseGviz, parseWishlists, parseRuleCell, fetchWishlists };
