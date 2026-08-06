@@ -2,8 +2,8 @@ name: WikiMasters — ouvrir et étiqueter
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
-    - cron: "7 */6 * * *"
+    # Hors des minutes de pointe, où GitHub peut retarder ou abandonner les runs planifiés.
+    - cron: "37 * * * *"
     - cron: "17 3 1 * *"
   workflow_dispatch:
     inputs:
@@ -25,7 +25,8 @@ jobs:
   run:
     if: github.event.schedule != '17 3 1 * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Le délai couvre aussi l'attente d'un runner GitHub hébergé.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         run: |
@@ -42,7 +43,6 @@ jobs:
           WIKIMASTERS_EMAIL: ${{ secrets.WIKIMASTERS_EMAIL }}
           WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
           COLLECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.collection_only }}
-          SCAN_COLLECTION: ${{ inputs.collection_only || github.event.schedule == '7 */6 * * *' }}
 
   keepalive:
     if: github.event.schedule == '17 3 1 * *'
