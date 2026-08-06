@@ -11,6 +11,8 @@
     <div class="relative isolate group" data-case="target-only"><div class="cursor-pointer"><strong>À trier seulement</strong><span class="rounded-full">à trier</span></div><span class="selection-indicator"></span></div>
     <div class="relative isolate group" data-case="target-other"><div class="cursor-pointer"><strong>Classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
     <div class="relative isolate group" data-case="target-others"><div class="cursor-pointer"><strong>Multi-classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span><span class="rounded-full">rare</span></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group" data-case="osef-card"><div class="cursor-pointer"><img alt="Canard colvert"><strong>Canard colvert</strong><span class="rounded-full">Osef</span></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group" data-case="not-osef-card"><div class="cursor-pointer"><img alt="Montagne"><strong>Montagne</strong><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
   </main>
   <button id="next-decoy" hidden>Suivant</button><button id="next" hidden>Suivant</button>
   <footer hidden>
@@ -76,16 +78,32 @@
       const modal = document.createElement('div');
       modal.innerHTML = '<h2>Appliquer une étiquette</h2><input placeholder="Chercher ou créer une étiquette…"><button>à trier</button>';
       document.body.append(modal);
-      modal.querySelector('button').onclick = () => {
+      const apply = label => {
         const selected = cards.filter(card => card.dataset.selected === 'true');
         modal.innerHTML = `<p>0 carte étiquetée. (${selected.length} déjà étiquetées)</p><button id="done">Terminé</button>`;
         modal.querySelector('#done').onclick = () => {
           selected.forEach(card => {
-            card.querySelector('.cursor-pointer').insertAdjacentHTML('beforeend', '<span class="rounded-full">à trier</span>');
+            if (!labels(card).includes(label)) {
+              const badge = document.createElement('span');
+              badge.className = 'rounded-full';
+              badge.textContent = label;
+              card.querySelector('.cursor-pointer').append(badge);
+            }
             card.dataset.selected = 'false';
           });
           modal.remove(); refresh();
         };
+      };
+      modal.querySelector('button').onclick = () => apply('à trier');
+      modal.querySelector('input').oninput = event => {
+        modal.querySelector('[data-create]')?.remove();
+        const value = event.target.value.trim();
+        if (!value) return;
+        const create = document.createElement('button');
+        create.dataset.create = 'true';
+        create.textContent = `Créer « ${value} »`;
+        create.onclick = () => apply(value);
+        modal.append(create);
       };
     };
   </script>
