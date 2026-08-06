@@ -27,11 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      - name: Checkout
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Check Node.js
+        run: node -e "if (+process.versions.node.split('.')[0] < 20) process.exit(1)"
       - run: npm ci --omit=dev
       - run: npm start
         env:
@@ -40,14 +43,6 @@ jobs:
           WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
           COLLECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.collection_only }}
           SCAN_COLLECTION: ${{ inputs.collection_only || github.event.schedule == '7 */6 * * *' }}
-
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: diagnostic
-          path: |
-            failure.png
-            failure.html
 
   keepalive:
     if: github.event.schedule == '17 3 1 * *'
