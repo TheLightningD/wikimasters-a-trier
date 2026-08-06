@@ -1,11 +1,15 @@
 const assert = require('node:assert/strict');
 const { parseGviz, parseWishlists, parseRuleCell, desiredLabels, enrichCards, buildSyncPlan } = require('./wishlist');
 const browserOptions = require('./browser-options');
+const automationTimeout = require('./automation-timeout');
 
 (async () => {
 
 assert.deepEqual(browserOptions({}), {});
 assert.deepEqual(browserOptions({ GITHUB_ACTIONS: 'true' }), { args: ['--no-sandbox'] });
+assert.equal(automationTimeout('pulls'), 180000);
+assert.equal(automationTimeout('inventory'), 900000);
+assert.equal(automationTimeout('wishlist-apply'), 900000);
 
 const body = 'google.visualization.Query.setResponse(' + JSON.stringify({
   status: 'ok',

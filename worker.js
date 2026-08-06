@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { SHEET_URL, parseGviz, parseWishlists, desiredLabels, buildSyncPlan, enrichCards } = require('./wishlist');
 const browserOptions = require('./browser-options');
+const automationTimeout = require('./automation-timeout');
 
 const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
@@ -18,7 +19,7 @@ async function automate(page, mode, payload) {
     document.addEventListener('wm-tri-finished', event => { window.__wmDoneResult = event.detail; }, { once: true });
   });
   await page.click('#wm-tri-start');
-  await page.waitForFunction(() => window.__wmDoneResult !== null, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__wmDoneResult !== null, null, { timeout: automationTimeout(mode) });
   const result = await page.evaluate(() => ({
     stats: window.__wmDoneResult,
     status: document.querySelector('#wm-tri-status')?.textContent || '',
