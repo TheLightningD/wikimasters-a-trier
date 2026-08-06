@@ -21,7 +21,8 @@
   </footer>
   <script>
     const cards = [...document.querySelectorAll('.relative.isolate.group')];
-    const allLabeled = new URLSearchParams(location.search).has('all-labeled');
+    const params = new URLSearchParams(location.search);
+    const allLabeled = params.has('all-labeled');
     if (allLabeled) cards.filter(card => !card.querySelector('.rounded-full')).forEach(card => card.querySelector('.cursor-pointer').insertAdjacentHTML('beforeend', '<span class="rounded-full">favori</span>'));
     const cardList = document.querySelector('#cards');
     cards.forEach(card => card.remove());
@@ -55,22 +56,30 @@
       };
     }
     const labels = card => [...card.querySelectorAll('.rounded-full')].map(item => item.textContent.trim());
-    window.__cleanupSnapshot = () => Object.fromEntries(cards.filter(card => card.dataset.case).map(card => [card.dataset.case, labels(card)]));
+    const detailLabels = card => card.dataset.detailLabels ? JSON.parse(card.dataset.detailLabels) : labels(card);
+    const setDetailLabels = (card, values) => { card.dataset.detailLabels = JSON.stringify(values); };
+    if (params.has('details-only-labels')) {
+      const card = cards.find(item => item.dataset.case === 'osef-card');
+      setDetailLabels(card, labels(card));
+      [...card.querySelectorAll('.rounded-full')].filter(item => item.textContent.startsWith('échange · ')).forEach(item => item.remove());
+    }
+    window.__cleanupSnapshot = () => Object.fromEntries(cards.filter(card => card.dataset.case).map(card => [card.dataset.case, detailLabels(card)]));
     cards.forEach(card => card.querySelector('.cursor-pointer').onclick = () => {
       if (!document.querySelector('footer').hidden) {
         card.dataset.selected = card.dataset.selected === 'true' ? 'false' : 'true';
         refresh();
         return;
       }
-      if (['cleanup', 'wishlist-apply'].includes(document.documentElement.dataset.wmMode)) {
+      if (['cleanup', 'inventory', 'wishlist-apply'].includes(document.documentElement.dataset.wmMode)) {
         const modal = document.createElement('div');
         modal.className = 'details';
-        modal.innerHTML = `${labels(card).map(value => `<button aria-label="Retirer l'étiquette ${value}">${value}</button>`).join('')}<button aria-label="Fermer">×</button>`;
+        modal.innerHTML = `${detailLabels(card).map(value => `<button aria-label="Retirer l'étiquette ${value}">${value}</button>`).join('')}<button aria-label="Fermer">×</button>`;
         document.body.append(modal);
         [...modal.querySelectorAll('button')].slice(0, -1).forEach(button => button.addEventListener('click', event => {
           const value = event.currentTarget.textContent.trim();
           if (new URLSearchParams(location.search).has('failure') && card.dataset.case === 'target-other' && value === 'à trier') return;
           card.querySelectorAll('.rounded-full').forEach(item => { if (item.textContent.trim() === value) item.remove(); });
+          setDetailLabels(card, detailLabels(card).filter(label => label !== value));
           event.currentTarget.remove();
         }));
         modal.querySelector('[aria-label="Fermer"]').onclick = () => modal.remove();
@@ -93,7 +102,8 @@
         let applied = 0;
         let already = 0;
         selected.forEach(card => {
-          if (labels(card).includes(label)) { already++; return; }
+          if (detailLabels(card).includes(label)) { already++; return; }
+          setDetailLabels(card, [...detailLabels(card), label]);
           if (document.documentElement.dataset.wmMode !== 'wishlist-apply') {
             const badge = document.createElement('span');
             badge.className = 'rounded-full';

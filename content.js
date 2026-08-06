@@ -68,6 +68,9 @@
     const aria = norm(el.getAttribute('aria-label'));
     return /retirer.*etiquette/.test(aria) && (norm(el.innerText) === norm(name) || aria.endsWith(norm(name)));
   });
+  const detailLabels = () => controls().map(el => el.getAttribute('aria-label') || '')
+    .filter(value => /^retirer l['’]étiquette\s+/i.test(value))
+    .map(value => value.replace(/^retirer l['’]étiquette\s+/i, '').trim());
   const targetOption = () => optionNamed("à trier");
   const targetRemoval = () => removalNamed("à trier");
   const hasTargetLabel = () => !!targetRemoval();
@@ -261,16 +264,25 @@
       for (const card of cards.filter(item => cardLabels(item).includes("osef"))) {
         const title = cardTitle(card);
         if (!title) throw new Error("Titre d'une carte « osef » introuvable");
+        const selector = card.querySelector('.cursor-pointer');
+        if (!selector) throw new Error("Zone d'ouverture de carte introuvable pour l'inventaire");
+        selector.click();
+        const exactLabels = await waitFor(() => {
+          const values = detailLabels();
+          return values.some(value => norm(value) === "osef") ? values : null;
+        }, 3000);
+        if (!exactLabels) throw new Error(`Étiquettes détaillées introuvables pour « ${title} »`);
         const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
         const id = articleUrl ? `article:${articleUrl}` : `title:${norm(title)}`;
         inventory.set(id, {
           id,
           title,
           articleUrl,
-          labels: rawCardLabels(card),
+          labels: exactLabels,
           text: card.innerText.trim(),
           imageAlt: [...card.querySelectorAll('img[alt]:not([alt=""])')].map(image => image.alt.trim()).filter(Boolean).join(" ")
         });
+        await closeCardDetails();
       }
       if (!await nextCollectionPage(cards)) break;
     }
@@ -350,19 +362,23 @@
         for (const index of ids.map((id, index) => id === item.cardId && !handledCards.has(cards[index]) ? index : -1).filter(index => index >= 0)) {
           seen.add(item.cardId);
           if (!cardLabels(cards[index]).includes("osef")) throw new Error("Carte sans étiquette « osef » refusée");
-          const before = rawCardLabels(cards[index]);
           cards[index].querySelector('.cursor-pointer')?.click();
+          const before = await waitFor(() => {
+            const values = detailLabels();
+            return values.some(value => norm(value) === "osef") ? values : null;
+          }, 3000);
+          if (!before) throw new Error("Étiquettes détaillées introuvables avant retrait");
           for (const name of item.labels) {
             if (!name.startsWith("échange · ")) throw new Error(`Retrait non géré refusé: ${name}`);
             const remove = await waitFor(() => removalNamed(name), 2500);
             if (!remove) throw new Error(`Commande de retrait « ${name} » introuvable (contrôles: ${controls().map(label).filter(Boolean).slice(0, 12).join(" | ") || "aucun"})`);
             remove.click();
-            if (!await waitFor(() => !rawCardLabels(cards[index]).includes(name), 2500)) throw new Error(`Retrait « ${name} » non confirmé`);
+            if (!await waitFor(() => !detailLabels().includes(name), 2500)) throw new Error(`Retrait « ${name} » non confirmé`);
             state.stats.removals++;
           }
-          await closeCardDetails();
           const expected = before.filter(name => !item.labels.includes(name));
-          if (!expected.every(name => rawCardLabels(cards[index]).includes(name))) throw new Error("Une étiquette non gérée a été modifiée");
+          if (!expected.every(name => detailLabels().includes(name))) throw new Error("Une étiquette non gérée a été modifiée");
+          await closeCardDetails();
         }
       }
       cards.forEach(card => handledCards.add(card));
