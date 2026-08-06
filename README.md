@@ -23,3 +23,5 @@ WISHLIST_SYNC=true WISHLIST_APPLY=false npm start
 ```
 
 Les compteurs sont affichés dans les logs. Le détail local est écrit dans `wishlist-report.json`, ignoré par Git et jamais téléversé par le workflow public.
+
+Le lancement manuel GitHub propose `wishlist_sync` pour cet audit et `wishlist_apply` pour créer ou synchroniser les étiquettes gérées `échange · <Pseudo>` sur les cartes portant `osef`. Le résumé Actions reste agrégé : aucun titre de carte n’y est publié.

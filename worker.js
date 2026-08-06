@@ -103,6 +103,8 @@ async function automate(page, mode, payload) {
       const report = {
         createdAt: new Date().toISOString(),
         sheetHash: crypto.createHash('sha256').update(sheetBody).digest('hex'),
+        people: wishlists.length,
+        rules: wishlists.reduce((sum, item) => sum + item.cells.length, 0),
         cardsScanned: cards.length,
         additions: sync.additions.reduce((sum, item) => sum + item.labels.length, 0),
         removals: sync.removals.reduce((sum, item) => sum + item.labels.length, 0),
@@ -139,6 +141,24 @@ async function automate(page, mode, payload) {
           testWishlist = applied.testCleanup;
           testCreatedLabels = applied.testCreatedLabels;
         }
+      }
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        const mode = process.env.WISHLIST_APPLY === 'true' ? 'application' : 'audit';
+        fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+          '## Synchronisation des échanges',
+          '',
+          '| Mesure | Valeur |',
+          '| --- | ---: |',
+          `| Mode | ${mode} |`,
+          `| Pseudos | ${report.people} |`,
+          `| Règles | ${report.rules} |`,
+          `| Cartes \`osef\` | ${report.cardsScanned} |`,
+          `| Ajouts prévus | ${report.additions} |`,
+          `| Retraits prévus | ${report.removals} |`,
+          `| Règles ambiguës | ${report.ambiguousRules} |`,
+          `| Empreinte feuille | \`${report.sheetHash.slice(0, 12)}\` |`,
+          ''
+        ].join('\n'));
       }
     }
 

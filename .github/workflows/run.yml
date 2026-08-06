@@ -12,6 +12,16 @@ on:
         required: false
         default: false
         type: boolean
+      wishlist_sync:
+        description: "Auditer les souhaits d’échange du Google Sheet"
+        required: false
+        default: false
+        type: boolean
+      wishlist_apply:
+        description: "Appliquer l’audit des souhaits d’échange"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -39,6 +49,8 @@ jobs:
           WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
           COLLECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.collection_only }}
           SCAN_COLLECTION: ${{ inputs.collection_only || github.event.schedule == '7 */6 * * *' }}
+          WISHLIST_SYNC: ${{ github.event_name == 'workflow_dispatch' && (inputs.wishlist_sync || inputs.wishlist_apply) }}
+          WISHLIST_APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.wishlist_apply }}
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
