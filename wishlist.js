@@ -88,7 +88,13 @@ async function enrichCards(cards, fetchImpl = fetch, apiUrl = 'https://fr.wikipe
       cllimit: 'max',
       titles: [...new Set(batch.map(card => card.title))].join('|')
     });
-    const response = await fetchImpl(url);
+    let response;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      response = await fetchImpl(url, { headers: { 'User-Agent': 'wikimasters-a-trier/1.0 (+https://github.com/TheLightningD/wikimasters-a-trier)' } });
+      if (response.status !== 429) break;
+      const seconds = Math.min(Number(response.headers?.get('retry-after')) || 2 ** attempt, 10);
+      await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+    }
     if (!response.ok) throw new Error(`Wikipédia inaccessible (${response.status})`);
     const payload = await response.json();
     if (!payload.query?.pages) throw new Error('Réponse Wikipédia invalide');

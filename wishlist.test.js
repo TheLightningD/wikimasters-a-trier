@@ -44,8 +44,9 @@ assert.deepEqual(desiredLabels({ ...card, metadata: `${card.metadata} mammifère
 assert.deepEqual(desiredLabels(card, [{ label: 'échange · ambigu', rules: [{ include: ['canard'], exclude: [], ambiguous: true }] }]), []);
 
 const requested = [];
-const enriched = await enrichCards([{ title: 'Canard colvert', metadata: '' }], async url => {
+const enriched = await enrichCards([{ title: 'Canard colvert', metadata: '' }], async (url, options) => {
   requested.push(String(url));
+  assert.match(options.headers['User-Agent'], /wikimasters-a-trier/i);
   return {
     ok: true,
     json: async () => ({ query: { pages: { 1: { title: 'Canard colvert', extract: 'Une espèce de canard.', categories: [{ title: 'Catégorie:Oiseau' }] } } } })
@@ -54,6 +55,14 @@ const enriched = await enrichCards([{ title: 'Canard colvert', metadata: '' }], 
 assert.equal(requested.length, 1);
 assert.match(requested[0], /titles=Canard\+colvert/);
 assert.match(enriched[0].metadata, /espèce de canard.*Catégorie:Oiseau/);
+
+let attempts = 0;
+await enrichCards([{ title: 'Canard colvert', metadata: '' }], async () => {
+  attempts++;
+  if (attempts === 1) return { ok: false, status: 429, headers: { get: () => '0' } };
+  return { ok: true, json: async () => ({ query: { pages: {} } }) };
+});
+assert.equal(attempts, 2);
 
 const sync = buildSyncPlan([{ ...card, labels: ['osef', 'échange · Canard', 'échange · AncienPseudo'] }], wishes);
 assert.deepEqual(sync.additions, [{ cardId: card.id, labels: ["échange · zine'"] }]);
