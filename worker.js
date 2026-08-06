@@ -7,8 +7,9 @@ const { SHEET_URL, parseGviz, parseWishlists, desiredLabels, buildSyncPlan, enri
 const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
 
-async function automate(page, mode) {
+async function automate(page, mode, payload) {
   await page.evaluate(value => { document.documentElement.dataset.wmMode = value; }, mode);
+  if (payload !== undefined) await page.evaluate(value => { window.__WM_WISHLIST_PLAN__ = value; }, payload);
   await page.addScriptTag({ path: path.join(__dirname, 'content.js') });
   await page.waitForSelector('#wm-tri-start', { timeout: 5000 });
   await page.evaluate(() => {
@@ -24,9 +25,10 @@ async function automate(page, mode) {
     inventory: window.__WM_TRI__?.inventory || [],
     isTest: document.documentElement.dataset.wmTest === '1',
     testVerified: window.__verifiedCount,
-    testCleanup: window.__cleanupSnapshot?.()
+    testCleanup: window.__cleanupSnapshot?.(),
+    testCreatedLabels: window.__createdLabels
   }));
-  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée|Nettoyage terminé|Inventaire osef terminé/i.test(result.status)) {
+  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée|Nettoyage terminé|Inventaire osef terminé|Souhaits synchronisés/i.test(result.status)) {
     const error = new Error(`${result.status}${result.logs.length ? ` · ${result.logs.join(' > ')}` : ''}`);
     error.result = result;
     throw error;
@@ -87,6 +89,8 @@ async function automate(page, mode) {
     const cleanup = await automate(page, 'cleanup');
     let wishlist = null;
     let testInventory;
+    let testWishlist;
+    let testCreatedLabels;
     if (process.env.WISHLIST_SYNC === 'true') {
       await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       const inventory = await automate(page, 'inventory');
@@ -125,9 +129,20 @@ async function automate(page, mode) {
         ambiguousRules: report.ambiguousRules
       };
       if (inventory.isTest) testInventory = inventory.inventory;
+      if (process.env.WISHLIST_APPLY === 'true') {
+        await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const applied = await automate(page, 'wishlist-apply', sync);
+        wishlist.applied = { additions: applied.stats.additions, removals: applied.stats.removals };
+        report.applied = wishlist.applied;
+        fs.writeFileSync(path.join(__dirname, 'wishlist-report.json'), `${JSON.stringify(report, null, 2)}\n`);
+        if (applied.isTest) {
+          testWishlist = applied.testCleanup;
+          testCreatedLabels = applied.testCreatedLabels;
+        }
+      }
     }
 
-    console.log(JSON.stringify({ pulls: pulls.stats, collection: collection.stats, cleanup: cleanup.stats, testCleanup: cleanup.testCleanup, ...(wishlist ? { wishlist } : {}), ...(testInventory ? { testInventory } : {}) }));
+    console.log(JSON.stringify({ pulls: pulls.stats, collection: collection.stats, cleanup: cleanup.stats, testCleanup: cleanup.testCleanup, ...(wishlist ? { wishlist } : {}), ...(testInventory ? { testInventory } : {}), ...(testWishlist ? { testWishlist, testCreatedLabels } : {}) }));
     if (pullsError) throw pullsError;
   } catch (error) {
     await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});

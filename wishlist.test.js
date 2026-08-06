@@ -59,5 +59,9 @@ const sync = buildSyncPlan([{ ...card, labels: ['osef', 'échange · Canard', '�
 assert.deepEqual(sync.additions, [{ cardId: card.id, labels: ["échange · zine'"] }]);
 assert.deepEqual(sync.removals, [{ cardId: card.id, labels: ['échange · AncienPseudo'] }]);
 assert.equal(sync.unchanged, 0);
+const converged = buildSyncPlan([{ ...card, labels: ['osef', 'échange · Canard', "échange · zine'"] }], wishes);
+assert.deepEqual(converged.additions, []);
+assert.deepEqual(converged.removals, []);
+assert.equal(converged.unchanged, 1);
 console.log('wishlist parser: ok');
 })().catch(error => { console.error(error); process.exit(1); });

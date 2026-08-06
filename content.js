@@ -29,6 +29,7 @@
   const COLLECTION = MODE === "collection";
   const CLEANUP = MODE === "cleanup";
   const INVENTORY = MODE === "inventory";
+  const WISHLIST_APPLY = MODE === "wishlist-apply";
 
   const state = window.__WM_TRI__ = {
     running: false,
@@ -62,11 +63,24 @@
     stopEl.hidden = !running;
   };
 
-  const targetOption = () => controls().find(el => el.matches('button,[role="button"]') && label(el) === "a trier");
-  const targetRemoval = () => controls().find(el => /retirer.*etiquette.*a trier/.test(label(el)));
+  const optionNamed = name => controls().find(el => el.matches('button,[role="button"]') && label(el) === norm(name));
+  const removalNamed = name => controls().find(el => {
+    const aria = norm(el.getAttribute('aria-label'));
+    return /retirer.*etiquette/.test(aria) && (norm(el.innerText) === norm(name) || aria.endsWith(norm(name)));
+  });
+  const targetOption = () => optionNamed("à trier");
+  const targetRemoval = () => removalNamed("à trier");
   const hasTargetLabel = () => !!targetRemoval();
   const rawCardLabels = card => [...card.querySelectorAll('span.rounded-full')].map(item => item.textContent.trim()).filter(Boolean);
   const cardLabels = card => rawCardLabels(card).map(norm);
+  const cardTitle = card => card.querySelector('img[alt]:not([alt=""])')?.alt.trim()
+    || card.querySelector('strong,h2,h3')?.textContent.trim()
+    || card.innerText.trim().split("\n")[0];
+  const cardIdentity = card => {
+    const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
+    const title = cardTitle(card);
+    return articleUrl ? `article:${articleUrl}` : title ? `title:${norm(title)}` : "";
+  };
   const collectionCards = () => [...document.querySelectorAll('.relative.isolate.group')];
   const waitForCollectionCards = () => waitFor(() => collectionCards().length ? collectionCards() : null, 10000);
   const nextCollectionPage = async cards => {
@@ -245,9 +259,7 @@
       const cards = await waitForCollectionCards();
       if (!cards?.length) throw new Error("Cartes de collection introuvables");
       for (const card of cards.filter(item => cardLabels(item).includes("osef"))) {
-        const title = card.querySelector('img[alt]:not([alt=""])')?.alt.trim()
-          || card.querySelector('strong,h2,h3')?.textContent.trim()
-          || card.innerText.trim().split("\n")[0];
+        const title = cardTitle(card);
         if (!title) throw new Error("Titre d'une carte « osef » introuvable");
         const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
         const id = articleUrl ? `article:${articleUrl}` : `title:${norm(title)}`;
@@ -265,6 +277,103 @@
     state.inventory = [...inventory.values()];
     state.stats.cards = state.inventory.length;
     report("Inventaire osef terminé");
+  }
+
+  async function leaveSelection() {
+    const leave = await waitFor(() => find(/^quitter la selection$/), 1000);
+    if (!leave) return;
+    leave.click();
+    if (!await waitFor(() => find(/^selectionner$/), 3000)) throw new Error("Le mode de sélection ne se ferme pas");
+  }
+
+  async function addManagedLabel(cards, indexes, name) {
+    if (!name.startsWith("échange · ")) throw new Error(`Étiquette non gérée refusée: ${name}`);
+    const enter = await waitFor(() => find(/^selectionner$/, true), 5000);
+    if (!enter) throw new Error("Bouton « Sélectionner » introuvable");
+    enter.click();
+    if (!await waitFor(() => find(/^quitter la selection$/), 3000)) throw new Error("Le mode de sélection ne s'active pas");
+    const selectable = await waitForCollectionCards();
+    for (const index of indexes) {
+      if (!cardLabels(selectable[index]).includes("osef")) throw new Error("Carte sans étiquette « osef » refusée");
+      const selector = selectable[index].querySelector('.cursor-pointer');
+      if (!selector) throw new Error("Zone de sélection de carte introuvable");
+      selector.click();
+      await sleep(30);
+    }
+    const tag = await waitFor(() => find(/^etiqueter$/, true), 2000);
+    if (!tag) throw new Error("Bouton « Étiqueter » introuvable");
+    tag.click();
+    let option = await waitFor(() => optionNamed(name), 1200);
+    if (!option) {
+      const input = await waitFor(() => controls().find(el => el.matches('input') && /chercher.*creer.*etiquette/.test(label(el))), 2000);
+      if (!input) throw new Error(`Création de l'étiquette « ${name} » introuvable`);
+      input.value = name;
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: name }));
+      option = await waitFor(() => controls().find(el => /^creer/.test(label(el)) && label(el).includes(norm(name))), 2000);
+      if (!option) throw new Error(`Commande de création « ${name} » introuvable`);
+    }
+    option.click();
+    const completion = await waitFor(() => {
+      const text = norm(document.body.innerText);
+      const applied = text.match(/(\d+) cartes? etiquetees?/);
+      const already = text.match(/(\d+) deja etiquetees?/);
+      return applied || already ? Number(applied?.[1] || 0) + Number(already?.[1] || 0) : 0;
+    }, 5000);
+    if (completion < indexes.length) throw new Error(`Confirmation incomplète pour « ${name} »: ${completion}/${indexes.length}`);
+    const done = await waitFor(() => controls().find(el => /^termine$/.test(label(el))), 2000);
+    if (!done) throw new Error(`Bouton « Terminé » introuvable pour « ${name} »`);
+    done.click();
+    await sleep(200);
+    await leaveSelection();
+    if (!await waitFor(() => indexes.every(index => rawCardLabels(collectionCards()[index]).includes(name)), 2500)) {
+      throw new Error(`Ajout « ${name} » non confirmé`);
+    }
+    state.stats.additions += indexes.length;
+  }
+
+  async function processWishlistApply() {
+    const plan = window.__WM_WISHLIST_PLAN__ || { additions: [], removals: [] };
+    state.stats.additions = 0;
+    state.stats.removals = 0;
+    const seen = new Set();
+    const handledCards = new WeakSet();
+    for (;;) {
+      const cards = await waitForCollectionCards();
+      if (!cards?.length) throw new Error("Cartes de collection introuvables");
+      const ids = cards.map(cardIdentity);
+      const additions = plan.additions.filter(item => ids.includes(item.cardId));
+      for (const name of [...new Set(additions.flatMap(item => item.labels))]) {
+        const indexes = ids.map((id, index) => !handledCards.has(cards[index]) && additions.some(item => item.cardId === id && item.labels.includes(name)) ? index : -1).filter(index => index >= 0);
+        if (!indexes.length) continue;
+        indexes.forEach(index => seen.add(ids[index]));
+        await addManagedLabel(cards, indexes, name);
+      }
+      for (const item of plan.removals.filter(entry => ids.includes(entry.cardId))) {
+        for (const index of ids.map((id, index) => id === item.cardId && !handledCards.has(cards[index]) ? index : -1).filter(index => index >= 0)) {
+          seen.add(item.cardId);
+          if (!cardLabels(cards[index]).includes("osef")) throw new Error("Carte sans étiquette « osef » refusée");
+          const before = rawCardLabels(cards[index]);
+          cards[index].querySelector('.cursor-pointer')?.click();
+          for (const name of item.labels) {
+            if (!name.startsWith("échange · ")) throw new Error(`Retrait non géré refusé: ${name}`);
+            const remove = await waitFor(() => removalNamed(name), 2500);
+            if (!remove) throw new Error(`Commande de retrait « ${name} » introuvable (contrôles: ${controls().map(label).filter(Boolean).slice(0, 12).join(" | ") || "aucun"})`);
+            remove.click();
+            if (!await waitFor(() => !rawCardLabels(cards[index]).includes(name), 2500)) throw new Error(`Retrait « ${name} » non confirmé`);
+            state.stats.removals++;
+          }
+          await closeCardDetails();
+          const expected = before.filter(name => !item.labels.includes(name));
+          if (!expected.every(name => rawCardLabels(cards[index]).includes(name))) throw new Error("Une étiquette non gérée a été modifiée");
+        }
+      }
+      cards.forEach(card => handledCards.add(card));
+      if (!await nextCollectionPage(cards)) break;
+    }
+    const expectedIds = new Set([...plan.additions, ...plan.removals].map(item => item.cardId));
+    if ([...expectedIds].some(id => !seen.has(id))) throw new Error("Carte planifiée introuvable dans la collection");
+    state.stats.cards = state.stats.additions + state.stats.removals;
+    report("Souhaits synchronisés");
   }
 
   async function processPack(packButton) {
@@ -339,6 +448,8 @@
         await processCleanup();
       } else if (INVENTORY) {
         await processInventory();
+      } else if (WISHLIST_APPLY) {
+        await processWishlistApply();
       } else {
         while (state.running) {
           const pack = await waitFor(() => find(PACK), state.stats.packs ? 2000 : 10000);
