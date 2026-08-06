@@ -2,8 +2,8 @@ name: WikiMasters — ouvrir et étiqueter
 
 on:
   schedule:
-    # Hors des minutes de pointe, où GitHub peut retarder ou abandonner les runs planifiés.
-    - cron: "37 * * * *"
+    # Deux créneaux hors pointe limitent l'effet d'un run planifié retardé ou abandonné par GitHub.
+    - cron: "7,37 * * * *"
     - cron: "17 3 1 * *"
   workflow_dispatch:
     inputs:
