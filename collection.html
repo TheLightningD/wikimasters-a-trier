@@ -83,6 +83,11 @@
       const modal = document.createElement('div');
       modal.innerHTML = '<h2>Appliquer une étiquette</h2><input placeholder="Chercher ou créer une étiquette…">';
       document.body.append(modal);
+      if (document.documentElement.dataset.wmMode === 'wishlist-apply') {
+        const input = modal.querySelector('input');
+        const nativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        Object.defineProperty(input, 'value', { configurable: true, get: () => nativeValue.get.call(input), set: () => {} });
+      }
       const apply = label => {
         const selected = cards.filter(card => card.dataset.selected === 'true');
         let applied = 0;

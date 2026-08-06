@@ -307,7 +307,7 @@
     if (!option) {
       const input = await waitFor(() => controls().find(el => el.matches('input') && /chercher.*creer.*etiquette/.test(label(el))), 2000);
       if (!input) throw new Error(`Création de l'étiquette « ${name} » introuvable`);
-      input.value = name;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, name);
       input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: name }));
       option = await waitFor(() => controls().find(el => /^creer/.test(label(el)) && label(el).includes(norm(name))), 2000);
       if (!option) throw new Error(`Commande de création « ${name} » introuvable`);
