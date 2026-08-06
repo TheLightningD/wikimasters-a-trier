@@ -14,14 +14,10 @@ L’extension Brave locale reste disponible dans ce même dossier, mais le worke
 
 Ouvrir l’onglet **Actions**, choisir **WikiMasters — ouvrir et étiqueter**, puis **Run workflow**. Le badge ci-dessus devient vert si l’ouverture des packs et le contrôle de la collection réussissent.
 
-## Auditer les souhaits d’échange
+## Synchroniser les souhaits d’échange localement
 
-Le mode audit lit le Google Sheet et les métadonnées Wikipédia sans modifier les étiquettes WikiMasters :
+Cette partie n’est pas exécutée par GitHub Actions. Sur Windows, double-cliquer sur `synchroniser-echanges.cmd`, puis saisir les identifiants WikiMasters demandés. Ils restent uniquement dans le processus en cours et ne sont pas enregistrés.
 
-```bash
-WISHLIST_SYNC=true WISHLIST_APPLY=false npm start
-```
+Le choix par défaut applique les étiquettes gérées `échange · <Pseudo>` aux cartes portant `#Osef`. Répondre `n` à la première question lance seulement un audit, sans modifier WikiMasters.
 
-Les compteurs sont affichés dans les logs. Le détail local est écrit dans `wishlist-report.json`, ignoré par Git et jamais téléversé par le workflow public.
-
-Le lancement manuel GitHub propose `wishlist_sync` pour cet audit et `wishlist_apply` pour créer ou synchroniser les étiquettes gérées `échange · <Pseudo>` sur les cartes portant `#Osef`. Le résumé Actions reste agrégé : aucun titre de carte n’y est publié.
+Le lanceur utilise Chrome ou Edge, installe les dépendances npm si nécessaire et écrit le détail dans `wishlist-report.json`, ignoré par Git. Il ne lance ni les boosters ni les passes « à trier ».

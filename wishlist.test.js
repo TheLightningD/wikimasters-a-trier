@@ -1,7 +1,11 @@
 const assert = require('node:assert/strict');
 const { parseGviz, parseWishlists, parseRuleCell, desiredLabels, enrichCards, buildSyncPlan } = require('./wishlist');
+const browserOptions = require('./browser-options');
 
 (async () => {
+
+assert.deepEqual(browserOptions({}), {});
+assert.deepEqual(browserOptions({ GITHUB_ACTIONS: 'true' }), { args: ['--no-sandbox'] });
 
 const body = 'google.visualization.Query.setResponse(' + JSON.stringify({
   status: 'ok',

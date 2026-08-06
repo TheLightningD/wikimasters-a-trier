@@ -3,6 +3,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { SHEET_URL, parseGviz, parseWishlists, desiredLabels, buildSyncPlan, enrichCards } = require('./wishlist');
+const browserOptions = require('./browser-options');
 
 const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
@@ -40,7 +41,7 @@ async function automate(page, mode, payload) {
   const browser = await chromium.launch({
     headless: true,
     ...(executablePath ? { executablePath } : process.platform === 'win32' ? { channel: 'msedge' } : {}),
-    args: ['--no-sandbox']
+    ...browserOptions(process.env)
   });
   const page = await browser.newPage({ locale: 'fr-FR' });
 
@@ -65,9 +66,10 @@ async function automate(page, mode, payload) {
       return link?.href || '';
     }) || new URL('/collection', pullsUrl).href;
 
-    const collectionOnly = process.env.COLLECTION_ONLY === 'true';
+    const wishlistOnly = process.env.WISHLIST_ONLY === 'true';
+    const collectionOnly = process.env.COLLECTION_ONLY === 'true' || wishlistOnly;
     let pullsError = null;
-    let pulls = { stats: { packs: 0, cards: 0 }, logs: ['Packs ignorés (collection uniquement)'] };
+    let pulls = { stats: { packs: 0, cards: 0 }, logs: [wishlistOnly ? 'Packs ignorés (synchronisation d’échange locale)' : 'Packs ignorés (collection uniquement)'] };
     if (!collectionOnly) {
       try {
         pulls = await automate(page, 'pulls');
@@ -82,16 +84,20 @@ async function automate(page, mode, payload) {
       const pullControls = await page.locator('button,[role="button"]').evaluateAll(items => [...new Set(items.map(item => `${item.innerText || ''} ${item.getAttribute('aria-label') || ''}`.trim()).filter(Boolean))].slice(0, 20));
       console.log(JSON.stringify({ pullControls }));
     }
-    const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
-    const collection = await automate(page, 'collection');
-    await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const cleanup = await automate(page, 'cleanup');
+    let collection;
+    let cleanup;
+    if (!wishlistOnly) {
+      const response = await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      if (response && !response.ok()) throw new Error(`Collection inaccessible (${response.status()})`);
+      collection = await automate(page, 'collection');
+      await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      cleanup = await automate(page, 'cleanup');
+    }
     let wishlist = null;
     let testInventory;
     let testWishlist;
     let testCreatedLabels;
-    if (process.env.WISHLIST_SYNC === 'true') {
+    if (process.env.WISHLIST_SYNC === 'true' || wishlistOnly) {
       await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       const inventory = await automate(page, 'inventory');
       const sheetResponse = await fetch(process.env.WISHLIST_SHEET_URL || SHEET_URL);
@@ -162,7 +168,7 @@ async function automate(page, mode, payload) {
       }
     }
 
-    console.log(JSON.stringify({ pulls: pulls.stats, collection: collection.stats, cleanup: cleanup.stats, testCleanup: cleanup.testCleanup, ...(wishlist ? { wishlist } : {}), ...(testInventory ? { testInventory } : {}), ...(testWishlist ? { testWishlist, testCreatedLabels } : {}) }));
+    console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats, cleanup: cleanup.stats, testCleanup: cleanup.testCleanup } : {}), ...(wishlist ? { wishlist } : {}), ...(testInventory ? { testInventory } : {}), ...(testWishlist ? { testWishlist, testCreatedLabels } : {}) }));
     if (pullsError) throw pullsError;
   } catch (error) {
     await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
