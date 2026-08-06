@@ -1,6 +1,8 @@
 const { chromium } = require('playwright-core');
 const path = require('node:path');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
+const { SHEET_URL, parseGviz, parseWishlists, desiredLabels, buildSyncPlan, enrichCards } = require('./wishlist');
 
 const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
@@ -88,7 +90,40 @@ async function automate(page, mode) {
     if (process.env.WISHLIST_SYNC === 'true') {
       await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       const inventory = await automate(page, 'inventory');
-      wishlist = { cards: inventory.inventory.length };
+      const sheetResponse = await fetch(process.env.WISHLIST_SHEET_URL || SHEET_URL);
+      if (!sheetResponse.ok) throw new Error(`Google Sheets inaccessible (${sheetResponse.status})`);
+      const sheetBody = await sheetResponse.text();
+      const wishlists = parseWishlists(parseGviz(sheetBody));
+      const cards = await enrichCards(inventory.inventory, fetch, process.env.WIKIPEDIA_API_URL);
+      const sync = buildSyncPlan(cards, wishlists);
+      const report = {
+        createdAt: new Date().toISOString(),
+        sheetHash: crypto.createHash('sha256').update(sheetBody).digest('hex'),
+        cardsScanned: cards.length,
+        additions: sync.additions.reduce((sum, item) => sum + item.labels.length, 0),
+        removals: sync.removals.reduce((sum, item) => sum + item.labels.length, 0),
+        ambiguousRules: sync.ambiguousRules.length,
+        unchanged: sync.unchanged,
+        countsByPseudo: sync.countsByPseudo,
+        matches: cards.map(card => {
+          const wanted = desiredLabels(card, wishlists);
+          return {
+            id: card.id,
+            title: card.title,
+            currentManagedLabels: card.labels.filter(label => label.startsWith('échange · ')),
+            desiredLabels: wanted,
+            additions: wanted.filter(label => !card.labels.includes(label)),
+            removals: card.labels.filter(label => label.startsWith('échange · ') && !wanted.includes(label))
+          };
+        })
+      };
+      fs.writeFileSync(path.join(__dirname, 'wishlist-report.json'), `${JSON.stringify(report, null, 2)}\n`);
+      wishlist = {
+        cardsScanned: report.cardsScanned,
+        additions: report.additions,
+        removals: report.removals,
+        ambiguousRules: report.ambiguousRules
+      };
       if (inventory.isTest) testInventory = inventory.inventory;
     }
 

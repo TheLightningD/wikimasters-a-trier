@@ -13,3 +13,13 @@ L’extension Brave locale reste disponible dans ce même dossier, mais le worke
 ## Vérifier maintenant
 
 Ouvrir l’onglet **Actions**, choisir **WikiMasters — ouvrir et étiqueter**, puis **Run workflow**. Le badge ci-dessus devient vert si l’ouverture des packs et le contrôle de la collection réussissent.
+
+## Auditer les souhaits d’échange
+
+Le mode audit lit le Google Sheet et les métadonnées Wikipédia sans modifier les étiquettes WikiMasters :
+
+```bash
+WISHLIST_SYNC=true WISHLIST_APPLY=false npm start
+```
+
+Les compteurs sont affichés dans les logs. Le détail local est écrit dans `wishlist-report.json`, ignoré par Git et jamais téléversé par le workflow public.

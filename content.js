@@ -65,7 +65,8 @@
   const targetOption = () => controls().find(el => el.matches('button,[role="button"]') && label(el) === "a trier");
   const targetRemoval = () => controls().find(el => /retirer.*etiquette.*a trier/.test(label(el)));
   const hasTargetLabel = () => !!targetRemoval();
-  const cardLabels = card => [...card.querySelectorAll('span.rounded-full')].map(item => norm(item.textContent));
+  const rawCardLabels = card => [...card.querySelectorAll('span.rounded-full')].map(item => item.textContent.trim()).filter(Boolean);
+  const cardLabels = card => rawCardLabels(card).map(norm);
   const collectionCards = () => [...document.querySelectorAll('.relative.isolate.group')];
   const waitForCollectionCards = () => waitFor(() => collectionCards().length ? collectionCards() : null, 10000);
   const nextCollectionPage = async cards => {
@@ -254,7 +255,7 @@
           id,
           title,
           articleUrl,
-          labels: cardLabels(card),
+          labels: rawCardLabels(card),
           text: card.innerText.trim(),
           imageAlt: [...card.querySelectorAll('img[alt]:not([alt=""])')].map(image => image.alt.trim()).filter(Boolean).join(" ")
         });

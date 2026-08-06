@@ -72,11 +72,11 @@ function buildSyncPlan(cards, wishlists) {
   return { additions, removals, unchanged, ambiguousRules, countsByPseudo };
 }
 
-async function enrichCards(cards, fetchImpl = fetch) {
+async function enrichCards(cards, fetchImpl = fetch, apiUrl = 'https://fr.wikipedia.org/w/api.php') {
   const enriched = cards.map(card => ({ ...card }));
   for (let start = 0; start < enriched.length; start += 50) {
     const batch = enriched.slice(start, start + 50);
-    const url = new URL('https://fr.wikipedia.org/w/api.php');
+    const url = new URL(apiUrl);
     url.search = new URLSearchParams({
       action: 'query',
       format: 'json',
