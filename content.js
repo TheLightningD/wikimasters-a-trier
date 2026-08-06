@@ -28,11 +28,13 @@
   const MODE = document.documentElement.dataset.wmMode;
   const COLLECTION = MODE === "collection";
   const CLEANUP = MODE === "cleanup";
+  const INVENTORY = MODE === "inventory";
 
   const state = window.__WM_TRI__ = {
     running: false,
     used: new WeakSet(),
     stats: { packs: 0, cards: 0 },
+    inventory: [],
     logs: []
   };
 
@@ -236,6 +238,34 @@
     report("Nettoyage terminé");
   }
 
+  async function processInventory() {
+    const inventory = new Map();
+    for (;;) {
+      const cards = await waitForCollectionCards();
+      if (!cards?.length) throw new Error("Cartes de collection introuvables");
+      for (const card of cards.filter(item => cardLabels(item).includes("osef"))) {
+        const title = card.querySelector('img[alt]:not([alt=""])')?.alt.trim()
+          || card.querySelector('strong,h2,h3')?.textContent.trim()
+          || card.innerText.trim().split("\n")[0];
+        if (!title) throw new Error("Titre d'une carte « osef » introuvable");
+        const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
+        const id = articleUrl ? `article:${articleUrl}` : `title:${norm(title)}`;
+        inventory.set(id, {
+          id,
+          title,
+          articleUrl,
+          labels: cardLabels(card),
+          text: card.innerText.trim(),
+          imageAlt: [...card.querySelectorAll('img[alt]:not([alt=""])')].map(image => image.alt.trim()).filter(Boolean).join(" ")
+        });
+      }
+      if (!await nextCollectionPage(cards)) break;
+    }
+    state.inventory = [...inventory.values()];
+    state.stats.cards = state.inventory.length;
+    report("Inventaire osef terminé");
+  }
+
   async function processPack(packButton) {
     packButton.click();
     await sleep(600);
@@ -297,6 +327,7 @@
   async function run() {
     if (state.running) return;
     state.stats = { packs: 0, cards: 0 };
+    state.inventory = [];
     state.logs.length = 0;
     state.used = new WeakSet();
     setRunning(true);
@@ -305,6 +336,8 @@
         await processCollection();
       } else if (CLEANUP) {
         await processCleanup();
+      } else if (INVENTORY) {
+        await processInventory();
       } else {
         while (state.running) {
           const pack = await waitFor(() => find(PACK), state.stats.packs ? 2000 : 10000);

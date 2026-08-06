@@ -19,10 +19,12 @@ async function automate(page, mode) {
     stats: window.__wmDoneResult,
     status: document.querySelector('#wm-tri-status')?.textContent || '',
     logs: window.__WM_TRI__?.logs || [],
+    inventory: window.__WM_TRI__?.inventory || [],
+    isTest: document.documentElement.dataset.wmTest === '1',
     testVerified: window.__verifiedCount,
     testCleanup: window.__cleanupSnapshot?.()
   }));
-  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée|Nettoyage terminé/i.test(result.status)) {
+  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée|Nettoyage terminé|Inventaire osef terminé/i.test(result.status)) {
     const error = new Error(`${result.status}${result.logs.length ? ` · ${result.logs.join(' > ')}` : ''}`);
     error.result = result;
     throw error;
@@ -81,8 +83,16 @@ async function automate(page, mode) {
     const collection = await automate(page, 'collection');
     await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const cleanup = await automate(page, 'cleanup');
+    let wishlist = null;
+    let testInventory;
+    if (process.env.WISHLIST_SYNC === 'true') {
+      await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      const inventory = await automate(page, 'inventory');
+      wishlist = { cards: inventory.inventory.length };
+      if (inventory.isTest) testInventory = inventory.inventory;
+    }
 
-    console.log(JSON.stringify({ pulls: pulls.stats, ...(collection ? { collection: collection.stats } : {}), ...(cleanup ? { cleanup: cleanup.stats, testCleanup: cleanup.testCleanup } : {}) }));
+    console.log(JSON.stringify({ pulls: pulls.stats, collection: collection.stats, cleanup: cleanup.stats, testCleanup: cleanup.testCleanup, ...(wishlist ? { wishlist } : {}), ...(testInventory ? { testInventory } : {}) }));
     if (pullsError) throw pullsError;
   } catch (error) {
     await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
