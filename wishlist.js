@@ -39,6 +39,70 @@ function parseRuleCell(raw, category) {
   };
 }
 
+function desiredLabels(card, wishlists) {
+  if (!card.labels?.some(item => normalizeTerm(item) === 'osef')) return [];
+  const words = new Set(normalizeTerm([card.title, card.text, card.imageAlt, card.metadata].filter(Boolean).join(' ')).split(' ').filter(Boolean));
+  const matches = term => term.split(' ').every(word => words.has(word));
+  // ponytail: matching textuel explicable ; ajouter vision/LLM seulement si l’audit montre des faux négatifs importants.
+  return wishlists.filter(wishlist => {
+    const rules = wishlist.rules || wishlist.cells?.map(cell => parseRuleCell(cell.raw, cell.category)) || [];
+    return rules.some(rule => !rule.ambiguous
+      && rule.include.some(matches)
+      && !rule.exclude.some(matches));
+  }).map(wishlist => wishlist.label);
+}
+
+function buildSyncPlan(cards, wishlists) {
+  const additions = [];
+  const removals = [];
+  let unchanged = 0;
+  const countsByPseudo = {};
+  for (const card of cards.filter(item => item.labels?.some(label => normalizeTerm(label) === 'osef'))) {
+    const desired = new Set(desiredLabels(card, wishlists));
+    const existing = new Set(card.labels);
+    const add = [...desired].filter(label => !existing.has(label));
+    const remove = [...existing].filter(label => label.startsWith('échange · ') && !desired.has(label));
+    if (add.length) additions.push({ cardId: card.id, labels: add });
+    if (remove.length) removals.push({ cardId: card.id, labels: remove });
+    if (!add.length && !remove.length) unchanged++;
+    for (const label of desired) countsByPseudo[label.slice('échange · '.length)] = (countsByPseudo[label.slice('échange · '.length)] || 0) + 1;
+  }
+  const ambiguousRules = wishlists.flatMap(wishlist => (wishlist.rules || wishlist.cells?.map(cell => parseRuleCell(cell.raw, cell.category)) || [])
+    .filter(rule => rule.ambiguous).map(rule => ({ label: wishlist.label, category: rule.category })));
+  return { additions, removals, unchanged, ambiguousRules, countsByPseudo };
+}
+
+async function enrichCards(cards, fetchImpl = fetch) {
+  const enriched = cards.map(card => ({ ...card }));
+  for (let start = 0; start < enriched.length; start += 50) {
+    const batch = enriched.slice(start, start + 50);
+    const url = new URL('https://fr.wikipedia.org/w/api.php');
+    url.search = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      origin: '*',
+      redirects: '1',
+      prop: 'extracts|categories',
+      exintro: '1',
+      explaintext: '1',
+      cllimit: 'max',
+      titles: [...new Set(batch.map(card => card.title))].join('|')
+    });
+    const response = await fetchImpl(url);
+    if (!response.ok) throw new Error(`Wikipédia inaccessible (${response.status})`);
+    const payload = await response.json();
+    if (!payload.query?.pages) throw new Error('Réponse Wikipédia invalide');
+    const redirects = new Map((payload.query.redirects || []).map(item => [normalizeTerm(item.from), normalizeTerm(item.to)]));
+    const pages = new Map(Object.values(payload.query.pages).map(page => [normalizeTerm(page.title), page]));
+    for (const card of batch) {
+      const page = pages.get(redirects.get(normalizeTerm(card.title)) || normalizeTerm(card.title));
+      if (!page) continue;
+      card.metadata = [card.metadata, page.extract, ...(page.categories || []).map(item => item.title)].filter(Boolean).join(' ');
+    }
+  }
+  return enriched;
+}
+
 function parseWishlists(table) {
   const rows = table.rows;
   const headerIndex = rows.findIndex(row => row.c?.some(cell => String(cell?.v ?? '').trim() === 'Pseudo'));
@@ -64,4 +128,4 @@ async function fetchWishlists(fetchImpl = fetch) {
   return parseWishlists(parseGviz(await response.text()));
 }
 
-module.exports = { SHEET_URL, parseGviz, parseWishlists, parseRuleCell, fetchWishlists };
+module.exports = { SHEET_URL, parseGviz, parseWishlists, parseRuleCell, desiredLabels, buildSyncPlan, enrichCards, fetchWishlists };
