@@ -14,6 +14,12 @@ L’extension Brave locale reste disponible dans ce même dossier, mais le worke
 
 Ouvrir l’onglet **Actions**, choisir **WikiMasters — ouvrir et étiqueter**, puis **Run workflow**. Le badge ci-dessus devient vert si l’ouverture des packs et le contrôle de la collection réussissent.
 
+## Lancer l’ouverture et le tri localement
+
+Sur Windows, double-cliquer sur `ouvrir-et-trier.cmd`, puis saisir les identifiants WikiMasters demandés. Le lanceur ouvre tous les boosters disponibles, ajoute « à trier » aux cartes sans étiquette et retire uniquement « à trier » des cartes qui possèdent une autre étiquette.
+
+Les identifiants restent uniquement dans le processus en cours et ne sont pas enregistrés. Le lanceur utilise Chrome ou Edge et installe les dépendances npm si nécessaire.
+
 ## Synchroniser les souhaits d’échange localement
 
 Cette partie n’est pas exécutée par GitHub Actions. Sur Windows, double-cliquer sur `synchroniser-echanges.cmd`, puis saisir les identifiants WikiMasters demandés. Ils restent uniquement dans le processus en cours et ne sont pas enregistrés.

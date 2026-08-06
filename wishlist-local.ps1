@@ -1,4 +1,4 @@
-param([switch]$Audit)
+param([switch]$Audit, [switch]$Full)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -19,7 +19,7 @@ $browserCandidates = @(
 $browser = $browserCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 if (-not $browser) { throw 'Chrome ou Edge est requis.' }
 
-if (-not $Audit) {
+if (-not $Full -and -not $Audit) {
   $choice = Read-Host 'Appliquer les etiquettes d echange ? [O/n]'
   if ($choice -match '^[nN]') { $Audit = $true }
 }
@@ -32,15 +32,25 @@ try {
   $env:WIKIMASTERS_EMAIL = $email
   $env:WIKIMASTERS_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
   $env:CHROME_PATH = $browser
-  $env:WISHLIST_ONLY = 'true'
-  $env:WISHLIST_APPLY = if ($Audit) { 'false' } else { 'true' }
+  if ($Full) {
+    $env:COLLECTION_ONLY = 'false'
+    $env:SCAN_COLLECTION = 'true'
+    Remove-Item Env:WISHLIST_ONLY, Env:WISHLIST_SYNC, Env:WISHLIST_APPLY -ErrorAction SilentlyContinue
+  } else {
+    $env:WISHLIST_ONLY = 'true'
+    $env:WISHLIST_APPLY = if ($Audit) { 'false' } else { 'true' }
+  }
 
   & node.exe worker.js
-  if ($LASTEXITCODE -ne 0) { throw "La synchronisation a echoue (code $LASTEXITCODE)." }
+  if ($LASTEXITCODE -ne 0) { throw "WikiMasters a echoue (code $LASTEXITCODE)." }
 
   Write-Host ''
-  Write-Host "Termine. Rapport : $PSScriptRoot\wishlist-report.json" -ForegroundColor Green
+  if ($Full) {
+    Write-Host 'Ouverture et tri termines.' -ForegroundColor Green
+  } else {
+    Write-Host "Termine. Rapport : $PSScriptRoot\wishlist-report.json" -ForegroundColor Green
+  }
 } finally {
   [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-  Remove-Item Env:WIKIMASTERS_EMAIL, Env:WIKIMASTERS_PASSWORD, Env:CHROME_PATH, Env:WISHLIST_ONLY, Env:WISHLIST_APPLY -ErrorAction SilentlyContinue
+  Remove-Item Env:WIKIMASTERS_EMAIL, Env:WIKIMASTERS_PASSWORD, Env:CHROME_PATH, Env:COLLECTION_ONLY, Env:SCAN_COLLECTION, Env:WISHLIST_ONLY, Env:WISHLIST_SYNC, Env:WISHLIST_APPLY -ErrorAction SilentlyContinue
 }
