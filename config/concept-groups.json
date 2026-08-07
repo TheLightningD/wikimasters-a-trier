@@ -1,0 +1,9 @@
+[
+  { "keys": ["cul", "porno", "pornographie"], "terms": ["pornographie", "pornographique", "porno", "erotique", "erotisme", "nudite", "folle cul", "plan cul", "trou cul", "film cul"] },
+  { "keys": ["sport"], "terms": ["sport", "sportif", "football", "foot", "soccer", "basket ball", "basketball", "basketteur", "joueur basket", "joueuse basket", "rugby", "tennis", "volley", "volleyball", "handball", "baseball", "softball", "cricket", "hockey", "cyclisme", "cycliste", "velo", "vtt", "marathon", "athletisme", "natation", "ski", "snowboard", "biathlon", "boxe", "judo", "karate", "taekwondo", "lutteur", "lutte sportive", "catch", "gymnastique", "golfeur", "tournoi golf", "spot surf", "surfeur", "grimpeur", "equitation", "badminton", "squash", "tennis table", "ping pong", "petanque", "escrime", "aviron", "regate", "course voilier", "triathlon", "formule 1", "f1", "rallye", "karting"] },
+  { "keys": ["catch"], "terms": ["catch", "wrestling", "lutteur", "lutte sportive"] },
+  { "keys": ["f1"], "terms": ["f1", "formule 1", "grand prix automobile"] },
+  { "keys": ["vrou vroum"], "terms": ["moteur", "automobile", "voiture", "moto", "motocycle"] },
+  { "keys": ["meteo"], "terms": ["meteo", "meteorologie", "climat", "tempete", "ouragan", "cyclone", "tornade", "pluie", "neige", "orage"] },
+  { "keys": ["math", "mathematique"], "terms": ["math", "mathematique", "algebre", "geometrie", "arithmetique", "statistique", "probabilite"] }
+]

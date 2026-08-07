@@ -1,4 +1,12 @@
-node_modules/
-auth.json
-*.log
+# Artefacts de test non suivis
+failure.html
+failure.png
 wishlist-report.json
+.wishlist-summary-test.md
+*.log
+
+# Dépendances
+node_modules/
+
+# Credentials locaux (chiffrés DPAPI)
+credentials.xml
