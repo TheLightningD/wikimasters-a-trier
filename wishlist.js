@@ -73,7 +73,8 @@ function buildSyncPlan(cards, wishlists) {
   for (const card of cards.filter(item => item.labels?.some(label => normalizeTerm(label) === 'osef'))) {
     const desired = new Set(desiredLabels(card, wishlists));
     const existing = new Set(card.labels);
-    const add = [...desired].filter(label => !existing.has(label));
+    const common = new Set(card.commonLabels || card.labels);
+    const add = [...desired].filter(label => !common.has(label));
     const remove = [...existing].filter(label => label.startsWith('échange · ') && !desired.has(label));
     if (add.length) additions.push({ cardId: card.id, labels: add });
     if (remove.length) removals.push({ cardId: card.id, labels: remove });

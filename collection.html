@@ -23,9 +23,9 @@
     const cards = [...document.querySelectorAll('.relative.isolate.group')];
     cards.forEach((card, index) => { card.dataset.physicalId = `physical-${index}`; });
     const params = new URLSearchParams(location.search);
-    if (params.has('multipass-apply') || params.has('multipass-inventory') || params.has('duplicate-apply')) {
+    if (params.has('multipass-apply') || params.has('multipass-inventory') || params.has('duplicate-apply') || params.has('duplicate-divergent') || params.has('partial-hydration')) {
       const clone = cards.find(card => card.dataset.case === 'osef-card').cloneNode(true);
-      if (!params.has('duplicate-apply')) clone.querySelector('strong').textContent = 'Canard branchu';
+      if (!params.has('duplicate-apply') && !params.has('duplicate-divergent')) clone.querySelector('strong').textContent = 'Canard branchu';
       clone.dataset.physicalId = 'physical-clone';
       clone.removeAttribute('data-case');
       cards.push(clone);
@@ -91,7 +91,13 @@
       setDetailLabels(card, labels(card));
       [...card.querySelectorAll('.rounded-full')].filter(item => item.textContent.startsWith('échange · ')).forEach(item => item.remove());
     }
+    if (params.has('duplicate-divergent')) {
+      const [first, second] = cards.filter(card => card.querySelector('strong')?.textContent === 'Canard colvert');
+      setDetailLabels(first, [...new Set([...detailLabels(first), 'échange · Canard'])]);
+      setDetailLabels(second, detailLabels(second).filter(label => label !== 'échange · Canard'));
+    }
     window.__cleanupSnapshot = () => Object.fromEntries(cards.filter(card => card.dataset.case).map(card => [card.dataset.case, detailLabels(card)]));
+    window.__removalAttempts = 0;
     const bindCard = card => card.querySelector('.cursor-pointer').onclick = () => {
       if (!document.querySelector('footer').hidden) {
         card.dataset.selected = card.dataset.selected === 'true' ? 'false' : 'true';
@@ -108,6 +114,7 @@
           const removalButton = event.currentTarget;
           if (new URLSearchParams(location.search).has('failure') && card.dataset.case === 'target-other' && value === 'à trier') return;
           if (params.has('exchange-failure') && value === 'échange · AncienPseudo') return;
+          if (params.has('retry-recreate') && value === 'échange · AncienPseudo' && ++window.__removalAttempts < 3) return;
           if (params.has('stale-removal') && value === 'échange · AncienPseudo') {
             setDetailLabels(card, detailLabels(card).filter(label => label !== value));
             return;
@@ -120,7 +127,16 @@
           if (params.has('slow-removal') && value === 'échange · AncienPseudo') setTimeout(removeLabel, 3000);
           else removeLabel();
         }));
-        modal.querySelector('[aria-label="Fermer"]').onclick = () => modal.remove();
+        modal.querySelector('[aria-label="Fermer"]').onclick = () => {
+          modal.remove();
+          if (params.has('retry-recreate') && window.__removalAttempts > 0 && window.__removalAttempts < 3) {
+            const index = cards.indexOf(card);
+            const clone = card.cloneNode(true);
+            card.replaceWith(clone);
+            cards[index] = clone;
+            bindCard(clone);
+          }
+        };
         return;
       }
     };
@@ -135,6 +151,18 @@
       if (mode === 'inventory') sessionStorage.setItem('wm-inventory-pass', String(pass + 1));
       const hidden = mode === 'inventory-count' ? sourceCards : [sourceCards[pass % sourceCards.length]];
       hidden.forEach(card => [...card.querySelectorAll('.rounded-full')].find(label => label.textContent.trim() === '#Osef')?.remove());
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-wm-mode'] });
+    new MutationObserver((_, observer) => {
+      if (!params.has('partial-hydration')) return;
+      const mode = document.documentElement.dataset.wmMode;
+      if (!['inventory-count', 'inventory'].includes(mode)) return;
+      observer.disconnect();
+      const pass = Number(sessionStorage.getItem('wm-partial-pass') || 0);
+      if (mode === 'inventory') sessionStorage.setItem('wm-partial-pass', String(pass + 1));
+      if (mode === 'inventory-count' || pass === 0) {
+        const delayed = cards.find(card => card.dataset.physicalId === 'physical-clone');
+        [...delayed.querySelectorAll('.rounded-full')].find(label => label.textContent.trim() === '#Osef')?.remove();
+      }
     }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-wm-mode'] });
     new MutationObserver((_, observer) => {
       if (!params.has('multipass-apply') || document.documentElement.dataset.wmMode !== 'wishlist-apply') return;

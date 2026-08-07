@@ -78,6 +78,13 @@ server.listen(0, '127.0.0.1', async () => {
     WIKIPEDIA_API_URL: `http://127.0.0.1:${port}/wiki`,
     WM_COLLECTION_URL: `http://127.0.0.1:${port}/collection.html?all-labeled=1&details-only-labels=1&multipass-inventory=1`
   });
+  const inventoryPartial = await run({
+    WISHLIST_ONLY: 'true',
+    WISHLIST_APPLY: 'false',
+    WISHLIST_SHEET_URL: `http://127.0.0.1:${port}/sheet`,
+    WIKIPEDIA_API_URL: `http://127.0.0.1:${port}/wiki`,
+    WM_COLLECTION_URL: `http://127.0.0.1:${port}/collection.html?all-labeled=1&details-only-labels=1&partial-hydration=1`
+  });
   const cyclicPagination = await run({
     WISHLIST_ONLY: 'true',
     WISHLIST_APPLY: 'false',
@@ -107,12 +114,26 @@ server.listen(0, '127.0.0.1', async () => {
     WIKIPEDIA_API_URL: `http://127.0.0.1:${port}/wiki`,
     WM_COLLECTION_URL: `http://127.0.0.1:${port}/collection.html?all-labeled=1&details-only-labels=1&duplicate-apply=1`
   });
+  const wishlistDuplicateDivergent = await run({
+    WISHLIST_ONLY: 'true',
+    WISHLIST_APPLY: 'true',
+    WISHLIST_SHEET_URL: `http://127.0.0.1:${port}/sheet`,
+    WIKIPEDIA_API_URL: `http://127.0.0.1:${port}/wiki`,
+    WM_COLLECTION_URL: `http://127.0.0.1:${port}/collection.html?all-labeled=1&details-only-labels=1&duplicate-divergent=1`
+  });
   const wishlistApplyStale = await run({
     WISHLIST_ONLY: 'true',
     WISHLIST_APPLY: 'true',
     WISHLIST_SHEET_URL: `http://127.0.0.1:${port}/sheet`,
     WIKIPEDIA_API_URL: `http://127.0.0.1:${port}/wiki`,
     WM_COLLECTION_URL: `http://127.0.0.1:${port}/collection.html?all-labeled=1&details-only-labels=1&stale-removal=1&recreate-overlap=1&selection-reorder=1`
+  });
+  const wishlistRetryRecreate = await run({
+    WISHLIST_ONLY: 'true',
+    WISHLIST_APPLY: 'true',
+    WISHLIST_SHEET_URL: `http://127.0.0.1:${port}/sheet`,
+    WIKIPEDIA_API_URL: `http://127.0.0.1:${port}/wiki`,
+    WM_COLLECTION_URL: `http://127.0.0.1:${port}/collection.html?all-labeled=1&details-only-labels=1&retry-recreate=1`
   });
   const wishlistApplyFailure = await run({
     WISHLIST_ONLY: 'true',
@@ -148,6 +169,10 @@ server.listen(0, '127.0.0.1', async () => {
     console.error(inventoryMultipass.output.trim());
     process.exit(1);
   }
+  if (inventoryPartial.code !== 0 || !inventoryPartial.output.includes('[Comptage] 1 carte(s)') || !inventoryPartial.output.includes('"cardsScanned":2')) {
+    console.error(inventoryPartial.output.trim());
+    process.exit(1);
+  }
   if (cyclicPagination.code === 0 || !cyclicPagination.output.includes('Pagination cyclique')) {
     console.error(cyclicPagination.output.trim());
     process.exit(1);
@@ -160,12 +185,20 @@ server.listen(0, '127.0.0.1', async () => {
     console.error(wishlistApplyDuplicates.output.trim());
     process.exit(1);
   }
+  if (wishlistDuplicateDivergent.code !== 0 || !wishlistDuplicateDivergent.output.includes('"additions":1') || !wishlistDuplicateDivergent.output.includes('"applied":{"additions":1,"removals":2}')) {
+    console.error(wishlistDuplicateDivergent.output.trim());
+    process.exit(1);
+  }
   if (wishlistApplyFailure.code === 0 || !wishlistApplyFailure.output.includes('[Application]') || !wishlistApplyFailure.output.includes('après 1/1 cartes')) {
     console.error(wishlistApplyFailure.output.trim());
     process.exit(1);
   }
   if (wishlistApplyStale.code !== 0 || !wishlistApplyStale.output.includes('"applied":{"additions":1,"removals":1}') || wishlistApplyStale.output.includes(' 2/2 — Canard colvert')) {
     console.error(wishlistApplyStale.output.trim());
+    process.exit(1);
+  }
+  if (wishlistRetryRecreate.code !== 0 || !wishlistRetryRecreate.output.includes('"applied":{"additions":1,"removals":1}') || !wishlistRetryRecreate.output.includes('"osef-card":["#Osef","échange · AncienPseudo2","échange · Canard"]')) {
+    console.error(wishlistRetryRecreate.output.trim());
     process.exit(1);
   }
   if (!auditSummary.includes('Synchronisation des échanges') || !auditSummary.includes('Mode | audit') || !auditSummary.includes('Cartes `#Osef` | 1') || auditSummary.includes('Canard colvert') || success.code !== 0 || !success.output.includes('"packs":2') || !success.output.includes('"collection":{"packs":0,"cards":2}') || !success.output.includes('"cleanup":{"packs":0,"cards":2}') || !success.output.includes('"target-only":["à trier"]') || !success.output.includes('"target-other":["favori"]') || !success.output.includes('"target-others":["favori","rare"]') || !success.output.includes('"other-only":["favori"]') || !success.output.includes('"testVerified":6') || automatic.code !== 0 || !automatic.output.includes('"packs":2,"cards":6') || !automatic.output.includes('"cleanup":{"packs":0,"cards":2}') || empty.code !== 0 || !empty.output.includes('"collection":{"packs":0,"cards":0}') || !empty.output.includes('"cleanup":{"packs":0,"cards":2}') || inventory.code !== 0 || !inventory.output.includes('Packs ignorés (synchronisation d’échange locale)') || !inventory.output.includes('"wishlist":{"cardsScanned":1,"additions":1,"removals":1,"ambiguousRules":0}') || !inventory.output.includes('"labels":["#Osef","échange · AncienPseudo2","échange · AncienPseudo"]') || !inventory.output.includes('"exchangeCard":"Canard colvert"') || !inventory.output.includes('"person":"Canard"') || !inventory.output.includes('"category":"Nature vivante"') || !inventory.output.includes('"term":"canard"') || wishlistApply.code !== 0 || !wishlistApply.output.includes('"applied":{"additions":1,"removals":1}') || !wishlistApply.output.includes('"osef-card":["#Osef","échange · AncienPseudo2","échange · Canard"]') || !wishlistApply.output.includes('"testCreatedLabels":["échange · Canard"]') || !report || !appliedReport || report.cardsScanned !== 1 || report.additions !== 1 || report.removals !== 1 || report.ambiguousRules !== 0 || appliedReport.applied?.additions !== 1 || appliedReport.applied?.removals !== 1 || report.matches[0]?.title !== 'Canard colvert' || !report.matches[0]?.currentManagedLabels.includes('échange · AncienPseudo') || limited.code !== 0 || !limited.output.includes('"packs":1,"cards":3') || !limited.output.includes('"cleanup":{"packs":0,"cards":2}') || !limited.output.includes('Limite quotidienne') || brokenPull.code === 0 || !brokenPull.output.includes('"cleanup":{"packs":0,"cards":2}') || !brokenPull.output.includes('"wishlist":{"cardsScanned":1,"additions":1,"removals":1,"ambiguousRules":0}') || !brokenPull.output.includes('commande d’étiquette introuvable') || failure.code === 0 || !failure.output.includes('Retrait « à trier » non confirmé')) {

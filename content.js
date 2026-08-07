@@ -286,9 +286,10 @@
     const physicalIds = new Set();
     const pages = new Set();
     for (;;) {
-      const cards = await waitForCollectionCards();
+      let cards = await waitForCollectionCards();
       if (!cards?.length) throw new Error("Cartes de collection introuvables");
-      await waitFor(() => cards.some(card => card.querySelector('.rounded-full')), 15000);
+      await waitFor(() => collectionCards().some(card => card.querySelector('.rounded-full')), 15000);
+      cards = await waitForCollectionCards();
       rememberPage(cards, pages);
       for (const card of cards.filter(item => cardLabels(item).includes(SOURCE_LABEL))) {
         const physicalId = cardPhysicalIdentity(card);
@@ -331,7 +332,7 @@
         const id = articleUrl ? `article:${articleUrl}` : `title:${norm(title)}`;
         processed++;
         if (processed > total) total = processed;
-        if (skipped.has(id) || inventory.has(id)) {
+        if (skipped.has(physicalId)) {
           progress("Inventaire", processed, total, title);
           continue;
         }
@@ -343,11 +344,13 @@
           return values.some(value => norm(value) === SOURCE_LABEL) ? values : null;
         }, 3000);
         if (!exactLabels) throw new Error(`Étiquettes détaillées introuvables pour « ${title} »`);
+        const previous = inventory.get(id);
         inventory.set(id, {
           id,
           title,
           articleUrl,
-          labels: exactLabels,
+          labels: [...new Set([...(previous?.labels || []), ...exactLabels])],
+          commonLabels: previous ? previous.commonLabels.filter(label => exactLabels.includes(label)) : exactLabels,
           text: card.innerText.trim(),
           imageAlt: [...card.querySelectorAll('img[alt]:not([alt=""])')].map(image => image.alt.trim()).filter(Boolean).join(" ")
         });
@@ -459,8 +462,10 @@
       for (const item of plan.removals.filter(entry => ids.includes(entry.cardId))) {
         for (const index of ids.map((id, index) => id === item.cardId && eligible[index] && !handledCards.has(physicalIds[index]) ? index : -1).filter(index => index >= 0)) {
           seen.add(item.cardId);
-          if (!cardLabels(cards[index]).includes(SOURCE_LABEL)) throw new Error("Carte sans étiquette « #Osef » refusée");
-          cards[index].querySelector('.cursor-pointer')?.click();
+          const physicalId = physicalIds[index];
+          let currentCard = cards[index];
+          if (!cardLabels(currentCard).includes(SOURCE_LABEL)) throw new Error("Carte sans étiquette « #Osef » refusée");
+          currentCard.querySelector('.cursor-pointer')?.click();
           const before = await waitFor(() => {
             const values = detailLabels();
             return values.some(value => norm(value) === SOURCE_LABEL) ? values : null;
@@ -473,23 +478,18 @@
             let confirmed = false;
             for (let attempt = 1; attempt <= 3 && !confirmed; attempt++) {
               const remove = await waitFor(() => removalNamed(name), 5000);
-              if (!remove) {
-                const current = detailLabels();
-                confirmed = current.some(value => norm(value) === SOURCE_LABEL) && !current.some(value => norm(value) === norm(name));
-                break;
-              }
-              remove.click();
-              confirmed = !!await waitFor(() => !detailLabels().some(value => norm(value) === norm(name)), 15000);
-              if (!confirmed) {
-                await closeCardDetails();
-                cards[index].querySelector('.cursor-pointer')?.click();
-                const refreshed = await waitFor(() => {
-                  const values = detailLabels();
-                  return values.some(value => norm(value) === SOURCE_LABEL) ? values : null;
-                }, 5000);
-                confirmed = !!refreshed && !refreshed.some(value => norm(value) === norm(name));
-              }
-              if (!confirmed) report(`Nouvelle tentative de retrait « ${name} » (${attempt}/3)`);
+              remove?.click();
+              confirmed = !!await waitFor(() => {
+                const values = detailLabels();
+                return values.some(value => norm(value) === SOURCE_LABEL) && !values.some(value => norm(value) === norm(name));
+              }, remove ? 15000 : 500);
+              if (confirmed || attempt === 3) break;
+              await closeCardDetails();
+              currentCard = await waitFor(() => collectionCards().find(card => cardPhysicalIdentity(card) === physicalId), 5000);
+              if (!currentCard) throw new Error("Carte introuvable pour retenter le retrait");
+              currentCard.querySelector('.cursor-pointer')?.click();
+              if (!await waitFor(() => detailLabels().some(value => norm(value) === SOURCE_LABEL), 5000)) throw new Error("Étiquettes détaillées introuvables pendant une nouvelle tentative");
+              report(`Nouvelle tentative de retrait « ${name} » (${attempt}/3)`);
             }
             if (confirmed) {
               removed.add(name);

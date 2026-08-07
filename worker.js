@@ -117,7 +117,6 @@ async function automate(page, mode, payload) {
         await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
         count = await automate(page, 'inventory-count');
       }
-      const discoveryMode = !count.stats.cards;
       let totalCards = count.stats.cards;
       const expectedPhysicalIds = new Set(count.physicalIds);
       const coveredPhysicalIds = new Set();
@@ -128,19 +127,24 @@ async function automate(page, mode, payload) {
       for (;;) {
         const before = coveredPhysicalIds.size;
         await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        const pass = await automate(page, 'inventory', { totalCards, skipIds: [...inventoryById.keys()] });
+        const pass = await automate(page, 'inventory', { totalCards, skipIds: [...coveredPhysicalIds] });
         for (const card of pass.inventory) {
-          inventoryById.set(card.id, card);
+          const previous = inventoryById.get(card.id);
+          inventoryById.set(card.id, previous ? {
+            ...previous,
+            labels: [...new Set([...previous.labels, ...card.labels])],
+            commonLabels: previous.commonLabels.filter(label => card.commonLabels.includes(label))
+          } : card);
         }
         for (const id of pass.physicalIds) {
-          if (discoveryMode) expectedPhysicalIds.add(id);
+          expectedPhysicalIds.add(id);
           coveredPhysicalIds.add(id);
         }
         totalCards = Math.max(totalCards, expectedPhysicalIds.size);
         const covered = expectedPhysicalIds.size - missingPhysicalIds().length;
         console.log(`[Inventaire] ${covered}/${expectedPhysicalIds.size} carte(s) physique(s) · ${inventoryById.size} référence(s) unique(s)`);
         inventory = { ...pass, inventory: [...inventoryById.values()] };
-        if (!missingPhysicalIds().length && (!discoveryMode || coveredPhysicalIds.size === before)) break;
+        if (!missingPhysicalIds().length && coveredPhysicalIds.size === before) break;
         if (coveredPhysicalIds.size === before) throw new Error(`Inventaire bloqué: ${covered}/${expectedPhysicalIds.size} cartes #Osef`);
       }
       const sheetResponse = await fetch(process.env.WISHLIST_SHEET_URL || SHEET_URL);
