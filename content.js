@@ -28,6 +28,7 @@
   const MODE = document.documentElement.dataset.wmMode;
   const COLLECTION = MODE === "collection";
   const CLEANUP = MODE === "cleanup";
+  const INVENTORY_COUNT = MODE === "inventory-count";
   const INVENTORY = MODE === "inventory";
   const WISHLIST_APPLY = MODE === "wishlist-apply";
   const SOURCE_LABEL = "#osef";
@@ -58,6 +59,10 @@
     state.logs.push(message);
     statusEl.textContent = `${message} · ${state.stats.packs} pack(s), ${state.stats.cards} carte(s)`;
   };
+  const progress = (phase, processed, total, title = "") => {
+    statusEl.textContent = `${phase} · ${processed}/${total}${title ? ` · ${title}` : ""}`;
+    console.log(`__WM_PROGRESS__${JSON.stringify({ phase, processed, total, title })}`);
+  };
   const setRunning = running => {
     state.running = running;
     startEl.hidden = running;
@@ -77,26 +82,44 @@
   const hasTargetLabel = () => !!targetRemoval();
   const rawCardLabels = card => [...card.querySelectorAll('span.rounded-full')].map(item => item.textContent.trim()).filter(Boolean);
   const cardLabels = card => rawCardLabels(card).map(norm);
-  const cardTitle = card => card.querySelector('img[alt]:not([alt=""])')?.alt.trim()
-    || card.querySelector('strong,h2,h3')?.textContent.trim()
+  const cardTitle = card => card.querySelector('strong,h2,h3')?.textContent.trim()
+    || card.querySelector('img[alt]:not([alt=""])')?.alt.trim()
     || card.innerText.trim().split("\n")[0];
   const cardIdentity = card => {
     const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
     const title = cardTitle(card);
     return articleUrl ? `article:${articleUrl}` : title ? `title:${norm(title)}` : "";
   };
+  const cardPhysicalIdentity = card => {
+    if (card.dataset.physicalId) return card.dataset.physicalId;
+    // ponytail: WikiMasters n'expose l'id physique que dans les props React; préférer un attribut data-* s'il apparaît.
+    const key = Object.keys(card).find(name => name.startsWith('__reactProps$'));
+    const children = card[key]?.children;
+    const id = (Array.isArray(children) ? children : [children]).find(child => child?.props?.card?.id)?.props.card.id;
+    return id ? `card:${id}` : cardIdentity(card);
+  };
   const collectionCards = () => [...document.querySelectorAll('.relative.isolate.group')];
   const waitForCollectionCards = () => waitFor(() => collectionCards().length ? collectionCards() : null, 10000);
+  const pageSignature = cards => cards.map(cardPhysicalIdentity).filter(Boolean).join("\n");
+  const rememberPage = (cards, seen) => {
+    const signature = pageSignature(cards);
+    if (seen.has(signature)) throw new Error("Pagination cyclique détectée");
+    seen.add(signature);
+  };
   const nextCollectionPage = async cards => {
     const nextButtons = controls().filter(el => /^suivant/.test(label(el)) && !el.disabled);
     if (!nextButtons.length) return false;
-    const first = cards[0];
+    const before = pageSignature(cards);
     for (const next of nextButtons) {
       next.click();
-      if (await waitFor(() => collectionCards()[0] !== first, 2500)) {
+      if (await waitFor(() => {
+        const current = collectionCards();
+        return current.length && pageSignature(current) !== before;
+      }, 2500)) {
         await sleep(200);
         return true;
       }
+      if (next.disabled || !visible(next)) return false;
     }
     throw new Error("La page suivante de la collection ne charge pas");
   };
@@ -257,17 +280,60 @@
     report("Nettoyage terminé");
   }
 
-  async function processInventory() {
+  async function processInventoryCount() {
+    let total = 0;
     const inventory = new Map();
+    const physicalIds = new Set();
+    const pages = new Set();
     for (;;) {
       const cards = await waitForCollectionCards();
       if (!cards?.length) throw new Error("Cartes de collection introuvables");
+      await waitFor(() => cards.some(card => card.querySelector('.rounded-full')), 15000);
+      rememberPage(cards, pages);
       for (const card of cards.filter(item => cardLabels(item).includes(SOURCE_LABEL))) {
+        const physicalId = cardPhysicalIdentity(card);
+        if (!physicalId) throw new Error("Identité physique d'une carte « #Osef » introuvable");
+        if (physicalIds.has(physicalId)) continue;
+        physicalIds.add(physicalId);
+        total++;
+        const id = cardIdentity(card);
+        if (!id) throw new Error("Identité d'une carte « #Osef » introuvable");
+        const known = inventory.get(id);
+        inventory.set(id, { id, title: cardTitle(card), copies: (known?.copies || 0) + 1 });
+      }
+      if (!await nextCollectionPage(cards)) break;
+    }
+    state.inventory = [...inventory.values()];
+    state.physicalIds = [...physicalIds];
+    state.stats.cards = total;
+    report("Comptage osef terminé");
+  }
+
+  async function processInventory() {
+    const inventory = new Map();
+    const physicalIds = new Set();
+    const skipped = new Set(window.__WM_WISHLIST_PLAN__?.skipIds || []);
+    const pages = new Set();
+    let total = Number(window.__WM_WISHLIST_PLAN__?.totalCards) || 0;
+    let processed = 0;
+    for (;;) {
+      const cards = await waitForCollectionCards();
+      if (!cards?.length) throw new Error("Cartes de collection introuvables");
+      rememberPage(cards, pages);
+      for (const card of cards.filter(item => cardLabels(item).includes(SOURCE_LABEL))) {
+        const physicalId = cardPhysicalIdentity(card);
+        if (!physicalId) throw new Error("Identité physique d'une carte « #Osef » introuvable");
+        physicalIds.add(physicalId);
         const title = cardTitle(card);
         if (!title) throw new Error("Titre d'une carte « #Osef » introuvable");
         const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
         const id = articleUrl ? `article:${articleUrl}` : `title:${norm(title)}`;
-        if (inventory.has(id)) continue;
+        processed++;
+        if (processed > total) total = processed;
+        if (skipped.has(id) || inventory.has(id)) {
+          progress("Inventaire", processed, total, title);
+          continue;
+        }
         const selector = card.querySelector('.cursor-pointer');
         if (!selector) throw new Error("Zone d'ouverture de carte introuvable pour l'inventaire");
         selector.click();
@@ -285,10 +351,12 @@
           imageAlt: [...card.querySelectorAll('img[alt]:not([alt=""])')].map(image => image.alt.trim()).filter(Boolean).join(" ")
         });
         await closeCardDetails();
+        progress("Inventaire", processed, total, title);
       }
       if (!await nextCollectionPage(cards)) break;
     }
     state.inventory = [...inventory.values()];
+    state.physicalIds = [...physicalIds];
     state.stats.cards = state.inventory.length;
     report("Inventaire osef terminé");
   }
@@ -300,13 +368,21 @@
     if (!await waitFor(() => find(/^selectionner$/), 3000)) throw new Error("Le mode de sélection ne se ferme pas");
   }
 
-  async function addManagedLabel(cards, indexes, name) {
+  async function addManagedLabel(physicalIds, name) {
     if (!name.startsWith("échange · ")) throw new Error(`Étiquette non gérée refusée: ${name}`);
     const enter = await waitFor(() => find(/^selectionner$/, true), 5000);
     if (!enter) throw new Error("Bouton « Sélectionner » introuvable");
     enter.click();
     if (!await waitFor(() => find(/^quitter la selection$/), 3000)) throw new Error("Le mode de sélection ne s'active pas");
     const selectable = await waitForCollectionCards();
+    const remaining = [...physicalIds];
+    const indexes = selectable.map((card, index) => {
+      const match = remaining.indexOf(cardPhysicalIdentity(card));
+      if (match < 0) return -1;
+      remaining.splice(match, 1);
+      return index;
+    }).filter(index => index >= 0);
+    if (remaining.length) throw new Error("Carte planifiée introuvable après activation de la sélection");
     for (const index of indexes) {
       if (!cardLabels(selectable[index]).includes(SOURCE_LABEL)) throw new Error("Carte sans étiquette « #Osef » refusée");
       const selector = selectable[index].querySelector('.cursor-pointer');
@@ -331,37 +407,56 @@
       const text = norm(document.body.innerText);
       const applied = text.match(/(\d+) cartes? etiquetees?/);
       const already = text.match(/(\d+) deja etiquetees?/);
-      return applied || already ? Number(applied?.[1] || 0) + Number(already?.[1] || 0) : 0;
+      return applied || already ? { applied: Number(applied?.[1] || 0), already: Number(already?.[1] || 0) } : null;
     }, 5000);
-    if (completion < indexes.length) throw new Error(`Confirmation incomplète pour « ${name} »: ${completion}/${indexes.length}`);
+    if (!completion || completion.applied + completion.already < indexes.length) throw new Error(`Confirmation incomplète pour « ${name} »: ${(completion?.applied || 0) + (completion?.already || 0)}/${indexes.length}`);
     const done = await waitFor(() => controls().find(el => /^termine$/.test(label(el))), 2000);
     if (!done) throw new Error(`Bouton « Terminé » introuvable pour « ${name} »`);
     done.click();
     await sleep(200);
     await leaveSelection();
     // ponytail: les badges de collection restent obsolètes; le compteur serveur est la confirmation fiable.
-    state.stats.additions += indexes.length;
+    state.stats.additions += completion.applied;
   }
 
   async function processWishlistApply() {
     const plan = window.__WM_WISHLIST_PLAN__ || { additions: [], removals: [] };
+    let total = Number(plan.totalCards) || 0;
     state.stats.additions = 0;
     state.stats.removals = 0;
     const seen = new Set();
-    const handledCards = new WeakSet();
+    const seenPhysical = new Set();
+    const skipped = new Set(plan.skipIds || []);
+    const handledPlans = new Set();
+    const handledPlanCards = new WeakSet();
+    const handledCards = new Set();
+    const pages = new Set();
+    const failures = [];
+    let processed = 0;
     for (;;) {
       const cards = await waitForCollectionCards();
       if (!cards?.length) throw new Error("Cartes de collection introuvables");
+      rememberPage(cards, pages);
       const ids = cards.map(cardIdentity);
+      const physicalIds = cards.map(cardPhysicalIdentity);
+      const eligible = ids.map((id, index) => {
+        if (!cardLabels(cards[index]).includes(SOURCE_LABEL)) return false;
+        return !skipped.has(physicalIds[index]);
+      });
       const additions = plan.additions.filter(item => ids.includes(item.cardId));
       for (const name of [...new Set(additions.flatMap(item => item.labels))]) {
-        const indexes = ids.map((id, index) => !handledCards.has(cards[index]) && additions.some(item => item.cardId === id && item.labels.includes(name)) ? index : -1).filter(index => index >= 0);
+        const indexes = ids.map((id, index) => eligible[index] && !handledCards.has(physicalIds[index]) && additions.some(item => item.cardId === id && item.labels.includes(name)) ? index : -1).filter(index => index >= 0);
         if (!indexes.length) continue;
         indexes.forEach(index => seen.add(ids[index]));
-        await addManagedLabel(cards, indexes, name);
+        await addManagedLabel(indexes.map(index => physicalIds[index]), name);
+        indexes.forEach(index => {
+          if (handledPlanCards.has(cards[index])) return;
+          handledPlanCards.add(cards[index]);
+          handledPlans.add(physicalIds[index]);
+        });
       }
       for (const item of plan.removals.filter(entry => ids.includes(entry.cardId))) {
-        for (const index of ids.map((id, index) => id === item.cardId && !handledCards.has(cards[index]) ? index : -1).filter(index => index >= 0)) {
+        for (const index of ids.map((id, index) => id === item.cardId && eligible[index] && !handledCards.has(physicalIds[index]) ? index : -1).filter(index => index >= 0)) {
           seen.add(item.cardId);
           if (!cardLabels(cards[index]).includes(SOURCE_LABEL)) throw new Error("Carte sans étiquette « #Osef » refusée");
           cards[index].querySelector('.cursor-pointer')?.click();
@@ -370,25 +465,67 @@
             return values.some(value => norm(value) === SOURCE_LABEL) ? values : null;
           }, 3000);
           if (!before) throw new Error("Étiquettes détaillées introuvables avant retrait");
+          const removed = new Set();
           for (const name of item.labels) {
             if (!name.startsWith("échange · ")) throw new Error(`Retrait non géré refusé: ${name}`);
-            const remove = await waitFor(() => removalNamed(name), 2500);
-            if (!remove) throw new Error(`Commande de retrait « ${name} » introuvable (contrôles: ${controls().map(label).filter(Boolean).slice(0, 12).join(" | ") || "aucun"})`);
-            remove.click();
-            if (!await waitFor(() => !detailLabels().includes(name), 2500)) throw new Error(`Retrait « ${name} » non confirmé`);
-            state.stats.removals++;
+            if (!before.some(value => norm(value) === norm(name))) continue;
+            let confirmed = false;
+            for (let attempt = 1; attempt <= 3 && !confirmed; attempt++) {
+              const remove = await waitFor(() => removalNamed(name), 5000);
+              if (!remove) {
+                const current = detailLabels();
+                confirmed = current.some(value => norm(value) === SOURCE_LABEL) && !current.some(value => norm(value) === norm(name));
+                break;
+              }
+              remove.click();
+              confirmed = !!await waitFor(() => !detailLabels().some(value => norm(value) === norm(name)), 15000);
+              if (!confirmed) {
+                await closeCardDetails();
+                cards[index].querySelector('.cursor-pointer')?.click();
+                const refreshed = await waitFor(() => {
+                  const values = detailLabels();
+                  return values.some(value => norm(value) === SOURCE_LABEL) ? values : null;
+                }, 5000);
+                confirmed = !!refreshed && !refreshed.some(value => norm(value) === norm(name));
+              }
+              if (!confirmed) report(`Nouvelle tentative de retrait « ${name} » (${attempt}/3)`);
+            }
+            if (confirmed) {
+              removed.add(name);
+              state.stats.removals++;
+            } else {
+              failures.push(`Retrait « ${name} » non confirmé`);
+            }
           }
-          const expected = before.filter(name => !item.labels.includes(name));
-          if (!expected.every(name => detailLabels().includes(name))) throw new Error("Une étiquette non gérée a été modifiée");
+          const expected = before.filter(name => !removed.has(name));
+          const after = detailLabels().map(norm);
+          if (!expected.every(name => after.includes(norm(name)))) throw new Error("Une étiquette non gérée a été modifiée");
           await closeCardDetails();
+          if (!handledPlanCards.has(cards[index])) {
+            handledPlanCards.add(cards[index]);
+            handledPlans.add(physicalIds[index]);
+          }
         }
       }
-      cards.forEach(card => handledCards.add(card));
+      for (const card of cards.filter(item => cardLabels(item).includes(SOURCE_LABEL))) {
+        const id = cardIdentity(card);
+        if (!id) throw new Error("Identité d'une carte « #Osef » introuvable pendant l'application");
+        const physicalId = cardPhysicalIdentity(card);
+        if (!physicalId) throw new Error("Identité physique d'une carte « #Osef » introuvable pendant l'application");
+        seen.add(id);
+        seenPhysical.add(physicalId);
+        processed++;
+        if (processed > total) total = processed;
+        progress("Application", processed, total, cardTitle(card));
+      }
+      physicalIds.forEach(id => handledCards.add(id));
       if (!await nextCollectionPage(cards)) break;
     }
-    const expectedIds = new Set([...plan.additions, ...plan.removals].map(item => item.cardId));
-    if ([...expectedIds].some(id => !seen.has(id))) throw new Error("Carte planifiée introuvable dans la collection");
-    state.stats.cards = state.stats.additions + state.stats.removals;
+    state.inventory = [...seen].map(id => ({ id }));
+    state.physicalIds = [...seenPhysical];
+    state.handledIds = [...handledPlans];
+    state.stats.cards = processed;
+    if (failures.length) throw new Error(`${failures.length} retrait(s) non confirmé(s) après ${processed}/${total} cartes: ${failures.join("; ")}`);
     report("Souhaits synchronisés");
   }
 
@@ -462,6 +599,8 @@
         await processCollection();
       } else if (CLEANUP) {
         await processCleanup();
+      } else if (INVENTORY_COUNT) {
+        await processInventoryCount();
       } else if (INVENTORY) {
         await processInventory();
       } else if (WISHLIST_APPLY) {

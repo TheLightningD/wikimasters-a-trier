@@ -11,7 +11,7 @@
     <div class="relative isolate group" data-case="target-only"><div class="cursor-pointer"><strong>À trier seulement</strong><span class="rounded-full">à trier</span></div><span class="selection-indicator"></span></div>
     <div class="relative isolate group" data-case="target-other"><div class="cursor-pointer"><strong>Classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
     <div class="relative isolate group" data-case="target-others"><div class="cursor-pointer"><strong>Multi-classée</strong><span class="rounded-full">à trier</span><span class="rounded-full">favori</span><span class="rounded-full">rare</span></div><span class="selection-indicator"></span></div>
-    <div class="relative isolate group" data-case="osef-card"><div class="cursor-pointer"><img alt="Canard colvert"><strong>Canard colvert</strong><span class="rounded-full">#Osef</span><span class="rounded-full">échange · AncienPseudo2</span><span class="rounded-full">échange · AncienPseudo</span></div><span class="selection-indicator"></span></div>
+    <div class="relative isolate group" data-case="osef-card"><div class="cursor-pointer"><img alt="WikiMasters"><strong>Canard colvert</strong><span class="rounded-full">#Osef</span><span class="rounded-full">échange · AncienPseudo2</span><span class="rounded-full">échange · AncienPseudo</span></div><span class="selection-indicator"></span></div>
     <div class="relative isolate group" data-case="not-osef-card"><div class="cursor-pointer"><img alt="Montagne"><strong>Montagne</strong><span class="rounded-full">favori</span></div><span class="selection-indicator"></span></div>
   </main>
   <button id="next-decoy" hidden>Suivant</button><button id="next" hidden>Suivant</button>
@@ -21,9 +21,21 @@
   </footer>
   <script>
     const cards = [...document.querySelectorAll('.relative.isolate.group')];
+    cards.forEach((card, index) => { card.dataset.physicalId = `physical-${index}`; });
     const params = new URLSearchParams(location.search);
+    if (params.has('multipass-apply') || params.has('multipass-inventory') || params.has('duplicate-apply')) {
+      const clone = cards.find(card => card.dataset.case === 'osef-card').cloneNode(true);
+      if (!params.has('duplicate-apply')) clone.querySelector('strong').textContent = 'Canard branchu';
+      clone.dataset.physicalId = 'physical-clone';
+      clone.removeAttribute('data-case');
+      cards.push(clone);
+    }
     const allLabeled = params.has('all-labeled');
     if (allLabeled) cards.filter(card => !card.querySelector('.rounded-full')).forEach(card => card.querySelector('.cursor-pointer').insertAdjacentHTML('beforeend', '<span class="rounded-full">favori</span>'));
+    if (params.has('zero-count') && !sessionStorage.getItem('wm-zero-count-done')) {
+      sessionStorage.setItem('wm-zero-count-done', '1');
+      cards.find(card => card.dataset.case === 'osef-card').querySelectorAll('.rounded-full').forEach(label => label.remove());
+    }
     const cardList = document.querySelector('#cards');
     cards.forEach(card => card.remove());
     setTimeout(() => cardList.append(...cards), 800);
@@ -36,6 +48,7 @@
         return;
       }
       setTimeout(() => {
+        if (params.has('selection-reorder')) cardList.prepend(cards.at(-1));
         document.querySelector('footer').hidden = false;
         document.querySelector('#select').textContent = 'Quitter la sélection';
       }, 800);
@@ -44,15 +57,30 @@
       const next = document.querySelector('#next');
       document.querySelector('#next-decoy').hidden = false;
       next.hidden = false;
+      let page = 0;
       next.onclick = () => {
         if (!document.querySelector('footer').hidden) {
           document.querySelector('footer').hidden = true;
           document.querySelector('#select').textContent = 'Sélectionner';
           return;
         }
-        cardList.prepend(cards[1]);
+        if (params.has('multipass-apply') || params.has('multipass-inventory') || params.has('duplicate-apply')) {
+          next.disabled = true;
+          document.querySelector('#next-decoy').disabled = true;
+          return;
+        }
+        page++;
+        if (params.has('recreate-overlap')) {
+          const index = cards.findIndex(card => card.dataset.case === 'osef-card');
+          const clone = cards[index].cloneNode(true);
+          cards[index].replaceWith(clone);
+          cards[index] = clone;
+          bindCard(clone);
+        }
+        if (page % 2) cardList.prepend(cards[1]);
+        else cardList.append(cards[1]);
         document.querySelector('#next-decoy').disabled = true;
-        next.disabled = true;
+        next.disabled = params.has('cycle') ? page >= 3 : true;
       };
     }
     const labels = card => [...card.querySelectorAll('.rounded-full')].map(item => item.textContent.trim());
@@ -64,7 +92,7 @@
       [...card.querySelectorAll('.rounded-full')].filter(item => item.textContent.startsWith('échange · ')).forEach(item => item.remove());
     }
     window.__cleanupSnapshot = () => Object.fromEntries(cards.filter(card => card.dataset.case).map(card => [card.dataset.case, detailLabels(card)]));
-    cards.forEach(card => card.querySelector('.cursor-pointer').onclick = () => {
+    const bindCard = card => card.querySelector('.cursor-pointer').onclick = () => {
       if (!document.querySelector('footer').hidden) {
         card.dataset.selected = card.dataset.selected === 'true' ? 'false' : 'true';
         refresh();
@@ -77,15 +105,46 @@
         document.body.append(modal);
         [...modal.querySelectorAll('button')].slice(0, -1).forEach(button => button.addEventListener('click', event => {
           const value = event.currentTarget.textContent.trim();
+          const removalButton = event.currentTarget;
           if (new URLSearchParams(location.search).has('failure') && card.dataset.case === 'target-other' && value === 'à trier') return;
-          card.querySelectorAll('.rounded-full').forEach(item => { if (item.textContent.trim() === value) item.remove(); });
-          setDetailLabels(card, detailLabels(card).filter(label => label !== value));
-          event.currentTarget.remove();
+          if (params.has('exchange-failure') && value === 'échange · AncienPseudo') return;
+          if (params.has('stale-removal') && value === 'échange · AncienPseudo') {
+            setDetailLabels(card, detailLabels(card).filter(label => label !== value));
+            return;
+          }
+          const removeLabel = () => {
+            card.querySelectorAll('.rounded-full').forEach(item => { if (item.textContent.trim() === value) item.remove(); });
+            setDetailLabels(card, detailLabels(card).filter(label => label !== value));
+            removalButton.remove();
+          };
+          if (params.has('slow-removal') && value === 'échange · AncienPseudo') setTimeout(removeLabel, 3000);
+          else removeLabel();
         }));
         modal.querySelector('[aria-label="Fermer"]').onclick = () => modal.remove();
         return;
       }
-    });
+    };
+    cards.forEach(bindCard);
+    new MutationObserver((_, observer) => {
+      if (!params.has('multipass-inventory')) return;
+      const mode = document.documentElement.dataset.wmMode;
+      if (!['inventory-count', 'inventory'].includes(mode)) return;
+      observer.disconnect();
+      const sourceCards = cards.filter(card => [...card.querySelectorAll('.rounded-full')].some(label => label.textContent.trim() === '#Osef'));
+      const pass = Number(sessionStorage.getItem('wm-inventory-pass') || 0);
+      if (mode === 'inventory') sessionStorage.setItem('wm-inventory-pass', String(pass + 1));
+      const hidden = mode === 'inventory-count' ? sourceCards : [sourceCards[pass % sourceCards.length]];
+      hidden.forEach(card => [...card.querySelectorAll('.rounded-full')].find(label => label.textContent.trim() === '#Osef')?.remove());
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-wm-mode'] });
+    new MutationObserver((_, observer) => {
+      if (!params.has('multipass-apply') || document.documentElement.dataset.wmMode !== 'wishlist-apply') return;
+      observer.disconnect();
+      const pass = Number(sessionStorage.getItem('wm-apply-pass') || 0);
+      sessionStorage.setItem('wm-apply-pass', String(pass + 1));
+      const sourceCards = cards.filter(card => card.querySelector('.rounded-full')?.textContent.trim() === '#Osef' || [...card.querySelectorAll('.rounded-full')].some(label => label.textContent.trim() === '#Osef'));
+      const hidden = sourceCards[pass % sourceCards.length];
+      [...hidden.querySelectorAll('.rounded-full')].find(label => label.textContent.trim() === '#Osef')?.remove();
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-wm-mode'] });
     const availableLabels = new Set(['à trier']);
     window.__createdLabels = [];
     tag.onclick = () => {

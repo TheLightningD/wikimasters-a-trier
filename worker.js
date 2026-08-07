@@ -2,12 +2,17 @@ const { chromium } = require('playwright-core');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const { SHEET_URL, parseGviz, parseWishlists, desiredLabels, buildSyncPlan, enrichCards } = require('./wishlist');
+const { SHEET_URL, parseGviz, parseWishlists, explainMatches, desiredLabels, buildSyncPlan, enrichCards } = require('./wishlist');
 const browserOptions = require('./browser-options');
 const automationTimeout = require('./automation-timeout');
 
 const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
+const printProgress = ({ phase, processed, total, title = '' }) => {
+  const width = 20;
+  const filled = total ? Math.min(width, Math.floor(processed * width / total)) : 0;
+  console.log(`[${phase}] [${'#'.repeat(filled)}${'-'.repeat(width - filled)}] ${processed}/${total}${title ? ` — ${String(title).replace(/[\r\n]+/g, ' ')}` : ''}`);
+};
 
 async function automate(page, mode, payload) {
   await page.evaluate(value => { document.documentElement.dataset.wmMode = value; }, mode);
@@ -25,12 +30,14 @@ async function automate(page, mode, payload) {
     status: document.querySelector('#wm-tri-status')?.textContent || '',
     logs: window.__WM_TRI__?.logs || [],
     inventory: window.__WM_TRI__?.inventory || [],
+    physicalIds: window.__WM_TRI__?.physicalIds || [],
+    handledIds: window.__WM_TRI__?.handledIds || [],
     isTest: document.documentElement.dataset.wmTest === '1',
     testVerified: window.__verifiedCount,
     testCleanup: window.__cleanupSnapshot?.(),
     testCreatedLabels: window.__createdLabels
   }));
-  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée|Nettoyage terminé|Inventaire osef terminé|Souhaits synchronisés/i.test(result.status)) {
+  if (!/Terminé|Aucun nouveau pack trouvé|Collection vérifiée|Nettoyage terminé|Comptage osef terminé|Inventaire osef terminé|Souhaits synchronisés/i.test(result.status)) {
     const error = new Error(`${result.status}${result.logs.length ? ` · ${result.logs.join(' > ')}` : ''}`);
     error.result = result;
     throw error;
@@ -45,6 +52,11 @@ async function automate(page, mode, payload) {
     ...browserOptions(process.env)
   });
   const page = await browser.newPage({ locale: 'fr-FR' });
+  page.on('console', message => {
+    const text = message.text();
+    if (!text.startsWith('__WM_PROGRESS__')) return;
+    try { printProgress(JSON.parse(text.slice('__WM_PROGRESS__'.length))); } catch {}
+  });
 
   try {
     await page.goto(pullsUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -53,8 +65,8 @@ async function automate(page, mode, payload) {
       if (!process.env.WIKIMASTERS_EMAIL || !process.env.WIKIMASTERS_PASSWORD) {
         throw new Error('WIKIMASTERS_EMAIL et WIKIMASTERS_PASSWORD sont requis');
       }
-      await email.fill(process.env.WIKIMASTERS_EMAIL);
-      await page.getByLabel(/mot de passe|password/i).fill(process.env.WIKIMASTERS_PASSWORD);
+      await email.pressSequentially(process.env.WIKIMASTERS_EMAIL, { delay: 10 });
+      await page.getByLabel(/mot de passe|password/i).pressSequentially(process.env.WIKIMASTERS_PASSWORD, { delay: 10 });
       await page.getByRole('button', { name: /connexion|se connecter/i }).click();
       await page.waitForURL(/\/pulls(?:[/?#]|$)/, { timeout: 20000 });
     }
@@ -100,12 +112,48 @@ async function automate(page, mode, payload) {
     let testCreatedLabels;
     if (process.env.WISHLIST_SYNC === 'true' || wishlistOnly) {
       await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      const inventory = await automate(page, 'inventory');
+      let count = await automate(page, 'inventory-count');
+      if (!count.stats.cards) {
+        await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        count = await automate(page, 'inventory-count');
+      }
+      const discoveryMode = !count.stats.cards;
+      let totalCards = count.stats.cards;
+      const expectedPhysicalIds = new Set(count.physicalIds);
+      const coveredPhysicalIds = new Set();
+      console.log(`[Comptage] ${totalCards} carte(s) #Osef trouvée(s)`);
+      const inventoryById = new Map();
+      let inventory = { inventory: [], isTest: count.isTest };
+      const missingPhysicalIds = () => [...expectedPhysicalIds].filter(id => !coveredPhysicalIds.has(id));
+      for (;;) {
+        const before = coveredPhysicalIds.size;
+        await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const pass = await automate(page, 'inventory', { totalCards, skipIds: [...inventoryById.keys()] });
+        for (const card of pass.inventory) {
+          inventoryById.set(card.id, card);
+        }
+        for (const id of pass.physicalIds) {
+          if (discoveryMode) expectedPhysicalIds.add(id);
+          coveredPhysicalIds.add(id);
+        }
+        totalCards = Math.max(totalCards, expectedPhysicalIds.size);
+        const covered = expectedPhysicalIds.size - missingPhysicalIds().length;
+        console.log(`[Inventaire] ${covered}/${expectedPhysicalIds.size} carte(s) physique(s) · ${inventoryById.size} référence(s) unique(s)`);
+        inventory = { ...pass, inventory: [...inventoryById.values()] };
+        if (!missingPhysicalIds().length && (!discoveryMode || coveredPhysicalIds.size === before)) break;
+        if (coveredPhysicalIds.size === before) throw new Error(`Inventaire bloqué: ${covered}/${expectedPhysicalIds.size} cartes #Osef`);
+      }
       const sheetResponse = await fetch(process.env.WISHLIST_SHEET_URL || SHEET_URL);
       if (!sheetResponse.ok) throw new Error(`Google Sheets inaccessible (${sheetResponse.status})`);
       const sheetBody = await sheetResponse.text();
       const wishlists = parseWishlists(parseGviz(sheetBody));
-      const cards = await enrichCards(inventory.inventory, fetch, process.env.WIKIPEDIA_API_URL);
+      let classified = 0;
+      const cards = await enrichCards(inventory.inventory, fetch, process.env.WIKIPEDIA_API_URL, card => {
+        classified++;
+        printProgress({ phase: 'Attribution', processed: classified, total: inventory.inventory.length, title: card.title });
+        const assignments = explainMatches(card, wishlists).map(match => ({ person: match.pseudo, label: match.label, reasons: match.reasons }));
+        console.log(JSON.stringify({ exchangeCard: card.title, assignments, ...(assignments.length ? {} : { reason: 'aucun critère compatible' }) }));
+      });
       const sync = buildSyncPlan(cards, wishlists);
       const report = {
         createdAt: new Date().toISOString(),
@@ -113,6 +161,7 @@ async function automate(page, mode, payload) {
         people: wishlists.length,
         rules: wishlists.reduce((sum, item) => sum + item.cells.length, 0),
         cardsScanned: cards.length,
+        sourceCardsTotal: totalCards,
         additions: sync.additions.reduce((sum, item) => sum + item.labels.length, 0),
         removals: sync.removals.reduce((sum, item) => sum + item.labels.length, 0),
         ambiguousRules: sync.ambiguousRules.length,
@@ -139,15 +188,32 @@ async function automate(page, mode, payload) {
       };
       if (inventory.isTest) testInventory = inventory.inventory;
       if (process.env.WISHLIST_APPLY === 'true') {
-        await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        const applied = await automate(page, 'wishlist-apply', sync);
-        wishlist.applied = { additions: applied.stats.additions, removals: applied.stats.removals };
+        const seenPhysicalIds = new Set();
+        const handledPhysicalIds = new Set();
+        const appliedTotals = { additions: 0, removals: 0 };
+        const missingAppliedIds = () => [...expectedPhysicalIds].filter(id => !seenPhysicalIds.has(id));
+        for (;;) {
+          const before = expectedPhysicalIds.size - missingAppliedIds().length;
+          await page.goto(discoveredCollectionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          const applied = await automate(page, 'wishlist-apply', { ...sync, totalCards, skipIds: [...handledPhysicalIds] });
+          appliedTotals.additions += applied.stats.additions;
+          appliedTotals.removals += applied.stats.removals;
+          for (const id of applied.physicalIds) seenPhysicalIds.add(id);
+          for (const id of applied.handledIds) handledPhysicalIds.add(id);
+          const covered = expectedPhysicalIds.size - missingAppliedIds().length;
+          console.log(`[Application] ${covered}/${expectedPhysicalIds.size} carte(s) physique(s)`);
+          if (!missingAppliedIds().length) {
+            if (applied.isTest) {
+              testWishlist = applied.testCleanup;
+              testCreatedLabels = applied.testCreatedLabels;
+            }
+            break;
+          }
+          if (covered === before) throw new Error(`Application bloquée: ${covered}/${expectedPhysicalIds.size} cartes #Osef`);
+        }
+        wishlist.applied = appliedTotals;
         report.applied = wishlist.applied;
         fs.writeFileSync(path.join(__dirname, 'wishlist-report.json'), `${JSON.stringify(report, null, 2)}\n`);
-        if (applied.isTest) {
-          testWishlist = applied.testCleanup;
-          testCreatedLabels = applied.testCreatedLabels;
-        }
       }
       if (process.env.GITHUB_STEP_SUMMARY) {
         const mode = process.env.WISHLIST_APPLY === 'true' ? 'application' : 'audit';

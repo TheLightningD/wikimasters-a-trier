@@ -39,17 +39,30 @@ function parseRuleCell(raw, category) {
   };
 }
 
-function desiredLabels(card, wishlists) {
+function explainMatches(card, wishlists) {
   if (!card.labels?.some(item => normalizeTerm(item) === 'osef')) return [];
-  const words = new Set(normalizeTerm([card.title, card.text, card.imageAlt, card.metadata].filter(Boolean).join(' ')).split(' ').filter(Boolean));
-  const matches = term => term.split(' ').every(word => words.has(word));
+  const canonicalWord = word => /^.{4,}(?:isme|iste)$/.test(word) ? word.replace(/(?:isme|iste)$/, '') : word;
+  const fields = [
+    ['titre WikiMasters', card.title],
+    ['description Wikipédia', card.description]
+  ].map(([name, text]) => ({ name, words: new Set(normalizeTerm(text).split(' ').filter(Boolean).map(canonicalWord)) }));
+  const words = new Set(fields.flatMap(field => [...field.words]));
+  const matches = term => term.split(' ').every(word => words.has(canonicalWord(word)));
   // ponytail: matching textuel explicable ; ajouter vision/LLM seulement si l’audit montre des faux négatifs importants.
-  return wishlists.filter(wishlist => {
+  return wishlists.flatMap(wishlist => {
     const rules = wishlist.rules || wishlist.cells?.map(cell => parseRuleCell(cell.raw, cell.category)) || [];
-    return rules.some(rule => !rule.ambiguous
-      && rule.include.some(matches)
-      && !rule.exclude.some(matches));
-  }).map(wishlist => wishlist.label);
+    const reasons = rules.filter(rule => !rule.ambiguous && rule.include.some(matches) && !rule.exclude.some(matches))
+      .flatMap(rule => rule.include.filter(matches).map(term => ({
+        category: rule.category,
+        term,
+        sources: fields.filter(field => term.split(' ').some(word => field.words.has(canonicalWord(word)))).map(field => field.name)
+      })));
+    return reasons.length ? [{ label: wishlist.label, pseudo: wishlist.pseudo || wishlist.label.slice('échange · '.length), reasons }] : [];
+  });
+}
+
+function desiredLabels(card, wishlists) {
+  return explainMatches(card, wishlists).map(match => match.label);
 }
 
 function buildSyncPlan(cards, wishlists) {
@@ -72,7 +85,7 @@ function buildSyncPlan(cards, wishlists) {
   return { additions, removals, unchanged, ambiguousRules, countsByPseudo };
 }
 
-async function enrichCards(cards, fetchImpl = fetch, apiUrl = 'https://fr.wikipedia.org/w/api.php') {
+async function enrichCards(cards, fetchImpl = fetch, apiUrl = 'https://fr.wikipedia.org/w/api.php', onCard) {
   const enriched = cards.map(card => ({ ...card }));
   for (let start = 0; start < enriched.length; start += 50) {
     const batch = enriched.slice(start, start + 50);
@@ -102,8 +115,11 @@ async function enrichCards(cards, fetchImpl = fetch, apiUrl = 'https://fr.wikipe
     const pages = new Map(Object.values(payload.query.pages).map(page => [normalizeTerm(page.title), page]));
     for (const card of batch) {
       const page = pages.get(redirects.get(normalizeTerm(card.title)) || normalizeTerm(card.title));
-      if (!page) continue;
-      card.metadata = [card.metadata, page.extract, ...(page.categories || []).map(item => item.title)].filter(Boolean).join(' ');
+      if (page) {
+        card.description = [card.description, page.extract].filter(Boolean).join(' ');
+        card.metadata = [card.metadata, page.extract, ...(page.categories || []).map(item => item.title)].filter(Boolean).join(' ');
+      }
+      onCard?.(card);
     }
   }
   return enriched;
@@ -134,4 +150,4 @@ async function fetchWishlists(fetchImpl = fetch) {
   return parseWishlists(parseGviz(await response.text()));
 }
 
-module.exports = { SHEET_URL, parseGviz, parseWishlists, parseRuleCell, desiredLabels, buildSyncPlan, enrichCards, fetchWishlists };
+module.exports = { SHEET_URL, parseGviz, parseWishlists, parseRuleCell, explainMatches, desiredLabels, buildSyncPlan, enrichCards, fetchWishlists };

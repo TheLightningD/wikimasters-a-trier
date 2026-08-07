@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { parseGviz, parseWishlists, parseRuleCell, desiredLabels, enrichCards, buildSyncPlan } = require('./wishlist');
+const { parseGviz, parseWishlists, parseRuleCell, explainMatches, desiredLabels, enrichCards, buildSyncPlan } = require('./wishlist');
 const browserOptions = require('./browser-options');
 const automationTimeout = require('./automation-timeout');
 
@@ -8,8 +8,9 @@ const automationTimeout = require('./automation-timeout');
 assert.deepEqual(browserOptions({}), {});
 assert.deepEqual(browserOptions({ GITHUB_ACTIONS: 'true' }), { args: ['--no-sandbox'] });
 assert.equal(automationTimeout('pulls'), 180000);
-assert.equal(automationTimeout('inventory'), 900000);
-assert.equal(automationTimeout('wishlist-apply'), 900000);
+assert.equal(automationTimeout('inventory-count'), 0);
+assert.equal(automationTimeout('inventory'), 0);
+assert.equal(automationTimeout('wishlist-apply'), 0);
 
 const body = 'google.visualization.Query.setResponse(' + JSON.stringify({
   status: 'ok',
@@ -40,18 +41,28 @@ const card = {
   id: 'title:canard colvert',
   title: 'Canard colvert',
   labels: ['#Osef'],
-  metadata: 'Le Canard colvert est une espèce d’oiseaux. Catégories: Oiseau, Anatidae.'
+  description: 'Le Canard colvert est une espèce d’oiseaux.',
+  metadata: 'Catégories: Oiseau, Anatidae.'
 };
 const wishes = [
-  { label: 'échange · Canard', rules: [{ include: ['canard'], exclude: [], ambiguous: false }] },
-  { label: "échange · zine'", rules: [{ include: ['oiseau'], exclude: ['mammifere'], ambiguous: false }] }
+  { pseudo: 'Canard', label: 'échange · Canard', rules: [{ category: 'Nature vivante', include: ['canard'], exclude: [], ambiguous: false }] },
+  { pseudo: "zine'", label: "échange · zine'", rules: [{ category: 'Nature vivante', include: ['oiseau'], exclude: ['mammifere'], ambiguous: false }] }
 ];
+assert.deepEqual(explainMatches(card, wishes), [
+  { label: 'échange · Canard', pseudo: 'Canard', reasons: [{ category: 'Nature vivante', term: 'canard', sources: ['titre WikiMasters', 'description Wikipédia'] }] },
+  { label: "échange · zine'", pseudo: "zine'", reasons: [{ category: 'Nature vivante', term: 'oiseau', sources: ['description Wikipédia'] }] }
+]);
 assert.deepEqual(desiredLabels(card, wishes), ['échange · Canard', "échange · zine'"]);
+assert.deepEqual(desiredLabels({ ...card, title: 'Sans rapport', description: '', text: 'Canard', imageAlt: 'Canard', metadata: 'Catégorie:Canard' }, [wishes[0]]), []);
+assert.deepEqual(desiredLabels({ ...card, title: "Saison d'une équipe cycliste", description: '' }, [
+  { pseudo: 'Vivibike', label: 'échange · Vivibike', rules: [parseRuleCell('Cyclisme', 'Sports / Culture')] }
+]), ['échange · Vivibike']);
 assert.deepEqual(desiredLabels({ ...card, labels: ['favori'] }, wishes), []);
-assert.deepEqual(desiredLabels({ ...card, metadata: `${card.metadata} mammifère` }, [wishes[1]]), []);
+assert.deepEqual(desiredLabels({ ...card, description: `${card.description} mammifère` }, [wishes[1]]), []);
 assert.deepEqual(desiredLabels(card, [{ label: 'échange · ambigu', rules: [{ include: ['canard'], exclude: [], ambiguous: true }] }]), []);
 
 const requested = [];
+const enrichedAsReported = [];
 const enriched = await enrichCards([{ title: 'Canard colvert', metadata: '' }], async (url, options) => {
   requested.push(String(url));
   assert.match(options.headers['User-Agent'], /wikimasters-a-trier/i);
@@ -59,9 +70,11 @@ const enriched = await enrichCards([{ title: 'Canard colvert', metadata: '' }], 
     ok: true,
     json: async () => ({ query: { pages: { 1: { title: 'Canard colvert', extract: 'Une espèce de canard.', categories: [{ title: 'Catégorie:Oiseau' }] } } } })
   };
-});
+}, undefined, card => enrichedAsReported.push(card.title));
 assert.equal(requested.length, 1);
+assert.deepEqual(enrichedAsReported, ['Canard colvert']);
 assert.match(requested[0], /titles=Canard\+colvert/);
+assert.equal(enriched[0].description, 'Une espèce de canard.');
 assert.match(enriched[0].metadata, /espèce de canard.*Catégorie:Oiseau/);
 
 let attempts = 0;

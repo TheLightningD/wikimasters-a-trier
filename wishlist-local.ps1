@@ -1,4 +1,4 @@
-param([switch]$Audit, [switch]$Full)
+param([switch]$Audit, [switch]$Full, [switch]$ResetCredentials)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -24,12 +24,34 @@ if (-not $Full -and -not $Audit) {
   if ($choice -match '^[nN]') { $Audit = $true }
 }
 
-$email = Read-Host 'Adresse courriel WikiMasters'
-$password = Read-Host 'Mot de passe WikiMasters' -AsSecureString
-$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password)
+$credentialDirectory = Join-Path $env:LOCALAPPDATA 'WikiMasters-A-Trier'
+$credentialPath = Join-Path $credentialDirectory 'credentials.xml'
+if ($ResetCredentials) { Remove-Item $credentialPath -Force -ErrorAction SilentlyContinue }
+
+$credential = $null
+if (Test-Path $credentialPath) {
+  try {
+    $credential = Import-Clixml $credentialPath
+    if ($credential -isnot [System.Management.Automation.PSCredential] -or -not $credential.UserName) { throw 'Identifiants invalides' }
+  } catch {
+    Write-Warning 'Identifiants enregistres illisibles ; nouvelle saisie requise.'
+    $credential = $null
+    Remove-Item $credentialPath -Force -ErrorAction SilentlyContinue
+  }
+}
+if (-not $credential) {
+  $email = Read-Host 'Adresse courriel WikiMasters'
+  $password = Read-Host 'Mot de passe WikiMasters' -AsSecureString
+  $credential = [System.Management.Automation.PSCredential]::new($email, $password)
+  New-Item $credentialDirectory -ItemType Directory -Force | Out-Null
+  $credential | Export-Clixml $credentialPath
+  Write-Host 'Identifiants chiffres par Windows et enregistres pour les prochains lancements.'
+}
+
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($credential.Password)
 
 try {
-  $env:WIKIMASTERS_EMAIL = $email
+  $env:WIKIMASTERS_EMAIL = $credential.UserName
   $env:WIKIMASTERS_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
   $env:CHROME_PATH = $browser
   if ($Full) {
