@@ -323,6 +323,7 @@
       for (const card of cards.filter(item => cardLabels(item).includes(SOURCE_LABEL))) {
         const physicalId = cardPhysicalIdentity(card);
         if (!physicalId) throw new Error("Identité physique d'une carte « #Osef » introuvable");
+        if (physicalIds.has(physicalId)) continue;
         physicalIds.add(physicalId);
         const title = cardTitle(card);
         if (!title) throw new Error("Titre d'une carte « #Osef » introuvable");
@@ -512,9 +513,10 @@
         if (!id) throw new Error("Identité d'une carte « #Osef » introuvable pendant l'application");
         const physicalId = cardPhysicalIdentity(card);
         if (!physicalId) throw new Error("Identité physique d'une carte « #Osef » introuvable pendant l'application");
+        if (seenPhysical.has(physicalId)) continue;
         seen.add(id);
         seenPhysical.add(physicalId);
-        processed++;
+        processed = seenPhysical.size;
         if (processed > total) total = processed;
         progress("Application", processed, total, cardTitle(card));
       }

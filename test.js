@@ -136,7 +136,7 @@ server.listen(0, '127.0.0.1', async () => {
   const report = fs.existsSync(reportPath) ? JSON.parse(fs.readFileSync(reportPath, 'utf8')) : null;
   fs.rmSync(reportPath, { force: true });
   fs.rmSync(summaryPath, { force: true });
-  if (!inventory.output.includes('[Inventaire]') || !inventory.output.includes('2/2') || !wishlistApply.output.includes('[Application]') || !wishlistApply.output.includes('2/2')) {
+  if (!inventory.output.includes('[Inventaire] 1/1 carte(s) physique(s)') || !wishlistApply.output.includes('[Application] 1/1 carte(s) physique(s)')) {
     console.error(inventory.output.trim(), wishlistApply.output.trim());
     process.exit(1);
   }
@@ -160,11 +160,11 @@ server.listen(0, '127.0.0.1', async () => {
     console.error(wishlistApplyDuplicates.output.trim());
     process.exit(1);
   }
-  if (wishlistApplyFailure.code === 0 || !wishlistApplyFailure.output.includes('[Application]') || !wishlistApplyFailure.output.includes('2/2') || !wishlistApplyFailure.output.includes('après 2/2 cartes')) {
+  if (wishlistApplyFailure.code === 0 || !wishlistApplyFailure.output.includes('[Application]') || !wishlistApplyFailure.output.includes('après 1/1 cartes')) {
     console.error(wishlistApplyFailure.output.trim());
     process.exit(1);
   }
-  if (wishlistApplyStale.code !== 0 || !wishlistApplyStale.output.includes('"applied":{"additions":1,"removals":1}')) {
+  if (wishlistApplyStale.code !== 0 || !wishlistApplyStale.output.includes('"applied":{"additions":1,"removals":1}') || wishlistApplyStale.output.includes(' 2/2 — Canard colvert')) {
     console.error(wishlistApplyStale.output.trim());
     process.exit(1);
   }
