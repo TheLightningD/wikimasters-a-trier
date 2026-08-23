@@ -1,16 +1,17 @@
 # WikiMasters — À trier
 
 [![Validation du script](https://github.com/TheLightningD/wikimasters-a-trier/actions/workflows/run.yml/badge.svg)](https://github.com/TheLightningD/wikimasters-a-trier/actions/workflows/run.yml)
+[![Ouverture et tri](https://github.com/TheLightningD/wikimasters-a-trier/actions/workflows/live.yml/badge.svg)](https://github.com/TheLightningD/wikimasters-a-trier/actions/workflows/live.yml)
 
 GitHub Actions installe les dépendances et exécute toute la suite de tests à chaque modification, à la demande et une fois par jour. Le résumé du workflow indique clairement si l’installation et les tests ont réussi, ou quelle étape a échoué.
 
-L’ouverture réelle des boosters n’est pas exécutée sur un runner GitHub hébergé. WikiMasters demande de confirmer manuellement la fenêtre « Vérification rapide »; cette action est donc effectuée avec le raccourci Windows, dans un navigateur visible.
+GitHub tente aussi l’ouverture réelle des boosters deux fois par heure. Si aucun contrôle manuel n’apparaît, la connexion, l’ouverture et le contrôle de la collection s’exécutent automatiquement. Si Cloudflare ou la fenêtre « Vérification rapide » apparaît, le run s’arrête sans la valider et son résumé indique clairement la cause; le raccourci Windows permet alors de terminer l’opération dans un navigateur visible.
 
-Aucun identifiant WikiMasters n’est envoyé à GitHub Actions.
+Les identifiants ne sont jamais enregistrés dans le dépôt. L’ouverture automatique utilise uniquement les secrets GitHub `WIKIMASTERS_EMAIL` et `WIKIMASTERS_PASSWORD`.
 
 ## Vérifier la version GitHub
 
-Ouvrir l’onglet **Actions**, choisir **WikiMasters — validation du script**, puis **Run workflow**. Le badge ci-dessus devient vert si l’installation propre et tous les scénarios automatisés réussissent. En cas d’échec, le résumé du run affiche l’étape concernée et l’annotation renvoie vers les logs utiles.
+Ouvrir l’onglet **Actions**, choisir **WikiMasters — validation du script** pour contrôler le code ou **WikiMasters — ouvrir et trier** pour lancer immédiatement une tentative réelle. En cas d’échec, le résumé du run affiche l’étape concernée et l’annotation renvoie vers les logs utiles.
 
 ## Lancer l’ouverture et le tri localement
 
