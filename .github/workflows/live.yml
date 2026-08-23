@@ -40,13 +40,14 @@ jobs:
       - name: Installer les dépendances
         run: npm ci --omit=dev
 
-      - name: Vérifier Chrome
-        run: test -x /usr/bin/google-chrome
+      - name: Vérifier Chrome et l’écran virtuel
+        run: test -x /usr/bin/google-chrome && command -v xvfb-run
 
       - name: Ouvrir les boosters et trier la collection
-        run: npm start
+        run: xvfb-run -a npm start
         env:
           CHROME_PATH: /usr/bin/google-chrome
+          WM_HEADLESS: "false"
           WIKIMASTERS_EMAIL: ${{ secrets.WIKIMASTERS_EMAIL }}
           WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
           COLLECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.collection_only }}
