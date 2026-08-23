@@ -240,6 +240,17 @@ async function automate(page, mode, payload) {
       if (await login.count() !== 1) throw new Error('Bouton de connexion unique introuvable');
       await acceptBlockingPopup(page);
       if (await login.isDisabled()) {
+        const waitMs = Number(process.env.WM_CLOUDFLARE_WAIT_MS) || 15000;
+        if (prettyOutput) console.log(infoLine('Cloudflare', 'attente de la validation automatique'));
+        const deadline = Date.now() + waitMs;
+        while (await login.isDisabled().catch(() => false) && Date.now() < deadline) {
+          await page.waitForTimeout(Math.min(500, deadline - Date.now()));
+        }
+        if (!await login.isDisabled().catch(() => false) && prettyOutput) {
+          console.log(doneLine('Validation Cloudflare automatique terminée'));
+        }
+      }
+      if (await login.isDisabled()) {
         if (process.env.WM_MANUAL_LOGIN_HANDOFF === 'true' && !cdpEndpoint) {
           const error = new Error('Connexion manuelle Cloudflare requise dans Chrome normal.');
           error.exitCode = manualLoginExitCode;

@@ -23,6 +23,7 @@
     const challenge = new URLSearchParams(location.search).has('challenge');
     const loginStuck = new URLSearchParams(location.search).has('login-stuck');
     const cloudflare = new URLSearchParams(location.search).has('cloudflare');
+    const cloudflareAuto = new URLSearchParams(location.search).has('cloudflare-auto');
     const quickCheck = new URLSearchParams(location.search).has('quick-check');
     const tagged = Array(6).fill(false);
     window.__verifiedCount = 0;
@@ -103,11 +104,16 @@
     };
 
     const showLogin = () => {
-      const validation = cloudflare
+      const validation = cloudflare || cloudflareAuto
         ? '<p>Cloudflare Vérification…</p>'
         : `<div role="dialog"><p>Confirmer une action sans rapport</p><button id="unsafe-confirm">Confirmer</button></div><div role="dialog"><p>Validation requise avant l'ouverture des paquets</p><button id="validate">Valider</button></div>`;
       app.innerHTML = `<button id="login-decoy" type="button">Connexion</button><form><label>Adresse courriel<input type="email"></label><label>Mot de passe<input type="password"></label><button id="login" type="submit" disabled>Connexion</button></form>${validation}`;
-      if (!cloudflare) {
+      if (cloudflareAuto) {
+        setTimeout(() => {
+          document.querySelector('#login').disabled = false;
+          document.querySelector('form + p')?.remove();
+        }, 500);
+      } else if (!cloudflare) {
         document.querySelector('#unsafe-confirm').onclick = () => { app.innerHTML = '<p>Action indésirable confirmée</p>'; };
         document.querySelector('#validate').onclick = event => {
           event.currentTarget.closest('[role="dialog"]').remove();

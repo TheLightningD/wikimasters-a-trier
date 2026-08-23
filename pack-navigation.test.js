@@ -27,6 +27,7 @@ const run = (port, query, extraEnv = {}) => new Promise(resolve => {
       SCAN_COLLECTION: 'true',
       WM_PRETTY_OUTPUT: 'true',
       WM_LOGIN_TIMEOUT: '1500',
+      WM_CLOUDFLARE_WAIT_MS: '200',
       ...extraEnv
     }
   });
@@ -45,6 +46,10 @@ server.listen(0, '127.0.0.1', async () => {
     assert.match(success.output, /Étiquetage de la collection en cours/);
     assert.match(success.output, /Nettoyage de la collection en cours/);
     assert.match(success.output, /Vérification manuelle du site terminée/);
+
+    const automaticCloudflare = await run(server.address().port, 'challenge=1&cloudflare-auto=1', { WM_CLOUDFLARE_WAIT_MS: '1500' });
+    assert.equal(automaticCloudflare.code, 0, automaticCloudflare.output);
+    assert.match(automaticCloudflare.output, /Validation Cloudflare automatique terminée/);
 
     const stuck = await run(server.address().port, 'challenge=1&login-stuck=1');
     assert.notEqual(stuck.code, 0, stuck.output);
