@@ -85,6 +85,7 @@
   const cardTitle = card => card.querySelector('strong,h2,h3')?.textContent.trim()
     || card.querySelector('img[alt]:not([alt=""])')?.alt.trim()
     || card.innerText.trim().split("\n")[0];
+  const cardDescription = card => (card.querySelector('p[class*="line-clamp"]') || card.querySelector('p'))?.textContent.trim() || "";
   const cardIdentity = card => {
     const articleUrl = card.querySelector('a[href*="wikipedia.org"]')?.href || "";
     const title = cardTitle(card);
@@ -145,7 +146,6 @@
       return true;
     }
     option.click();
-    await sleep(300);
     return true;
   }
 
@@ -156,7 +156,6 @@
     let option = targetOption();
     if (option) {
       option.click();
-      await sleep(300);
       return "selected";
     }
 
@@ -171,6 +170,17 @@
       const rect = el.getBoundingClientRect();
       return rect.width > 150 && rect.height > 80 && rect.width * rect.height < innerWidth * innerHeight * .7;
     });
+  const packViewSignature = () => {
+    const card = cardCandidate();
+    if (!card) return "";
+    const container = card.parentElement || card;
+    const images = [...container.querySelectorAll('img')].map(image => image.currentSrc || image.src || image.alt).join(" ");
+    return norm(`${container.innerText} ${images}`);
+  };
+  const waitForPackAdvance = before => waitFor(() => {
+    const current = packViewSignature();
+    return before && current && current !== before;
+  }, 5000);
 
   async function openCardDetails() {
     if (find(LABEL_TRIGGER) || hasTargetLabel()) return true;
@@ -185,7 +195,7 @@
     const close = controls().find(el => /fermer|close/.test(label(el)) || /^(x|×)$/.test(label(el)));
     if (close) {
       close.click();
-      await sleep(200);
+      if (!await waitFor(() => !visible(close), 1000)) throw new Error("La fenêtre de détail ne se ferme pas");
     }
   }
 
@@ -209,7 +219,6 @@
           const selector = card.querySelector('.cursor-pointer');
           if (!selector) throw new Error("Zone de sélection de carte introuvable");
           selector.click();
-          await sleep(30);
         }
 
         const tag = await waitFor(() => find(/^etiqueter$/, true), 2000);
@@ -230,7 +239,6 @@
         const done = await waitFor(() => controls().find(el => /^termine$/.test(label(el))), 2000);
         if (!done) throw new Error("Bouton « Terminé » introuvable après l’étiquetage");
         done.click();
-        await sleep(300);
         state.stats.cards += completion;
 
         const leave = await waitFor(() => find(/^quitter la selection$/), 1000);
@@ -262,7 +270,7 @@
         const remove = await waitFor(targetRemoval, 2500);
         if (!remove) throw new Error("Commande de retrait « à trier » introuvable");
         remove.click();
-        await sleep(300);
+        if (!await waitFor(() => !targetRemoval(), 2500)) throw new Error("Retrait « à trier » non confirmé dans le détail");
         await closeCardDetails();
 
         const confirmed = await waitFor(() => {
@@ -349,6 +357,7 @@
           id,
           title,
           articleUrl,
+          description: previous?.description || cardDescription(card),
           labels: [...new Set([...(previous?.labels || []), ...exactLabels])],
           commonLabels: previous ? previous.commonLabels.filter(label => exactLabels.includes(label)) : exactLabels,
           text: card.innerText.trim(),
@@ -392,7 +401,6 @@
       const selector = selectable[index].querySelector('.cursor-pointer');
       if (!selector) throw new Error("Zone de sélection de carte introuvable");
       selector.click();
-      await sleep(30);
     }
     const tag = await waitFor(() => find(/^etiqueter$/, true), 2000);
     if (!tag) throw new Error("Bouton « Étiqueter » introuvable");
@@ -417,7 +425,6 @@
     const done = await waitFor(() => controls().find(el => /^termine$/.test(label(el))), 2000);
     if (!done) throw new Error(`Bouton « Terminé » introuvable pour « ${name} »`);
     done.click();
-    await sleep(200);
     await leaveSelection();
     // ponytail: les badges de collection restent obsolètes; le compteur serveur est la confirmation fiable.
     state.stats.additions += completion.applied;
@@ -533,7 +540,6 @@
 
   async function processPack(packButton) {
     packButton.click();
-    await sleep(600);
     if (DAILY_LIMIT.test(norm(document.body.innerText))) {
       report("Limite quotidienne de paquets atteinte");
       return false;
@@ -564,26 +570,27 @@
       state.stats.cards++;
       report("Étiquette vérifiée");
       await closeCardDetails();
+      const viewBefore = packViewSignature();
 
       const more = await waitFor(() => find(MORE_CARDS, true), 2000);
       if (more) {
         state.used.add(more);
         more.click();
-        await sleep(300);
+        if (!await waitForPackAdvance(viewBefore)) throw new Error("La carte suivante du pack ne charge pas");
         continue;
       }
 
       const nextCard = [...document.querySelectorAll('button')].find(el => visible(el) && el.querySelector('polyline[points="9 18 15 12 9 6"]'));
       if (nextCard) {
         nextCard.click();
-        await sleep(300);
+        if (!await waitForPackAdvance(viewBefore)) throw new Error("La carte suivante du pack ne charge pas");
         continue;
       }
 
       const done = await waitFor(() => find(CONTINUE), 2000);
       if (!done) throw new Error("Pack étiqueté, mais bouton de fin introuvable");
       done.click();
-      await sleep(600);
+      if (!await waitFor(() => !visible(done), 2000)) throw new Error("La fin du pack ne se confirme pas");
       return true;
     }
     if (state.running) throw new Error("Délai dépassé pendant le traitement du pack");

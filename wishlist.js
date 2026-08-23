@@ -20,6 +20,21 @@ function normalizeTerm(input) {
     .join(' ');
 }
 
+const fs = require('fs');
+const path = require('path');
+const CONCEPT_GROUPS = JSON.parse(
+  fs.readFileSync(path.join(__dirname, 'config', 'concept-groups.json'), 'utf8')
+).map(group => ({
+  keys: group.keys.map(normalizeTerm),
+  terms: group.terms.map(normalizeTerm)
+}));
+
+function semanticTerms(term) {
+  const intent = term.replace(/^(?:image|photo|truc|concept|lieu)\s+/, '');
+  const group = CONCEPT_GROUPS.find(item => item.keys.includes(intent));
+  return { terms: group?.terms || [intent], expanded: Boolean(group) };
+}
+
 function parseRuleCell(raw, category) {
   const hasSeparator = /[\n,/]/.test(raw);
   const include = [];
@@ -44,18 +59,38 @@ function explainMatches(card, wishlists) {
   const canonicalWord = word => /^.{4,}(?:isme|iste)$/.test(word) ? word.replace(/(?:isme|iste)$/, '') : word;
   const fields = [
     ['titre WikiMasters', card.title],
-    ['description Wikipédia', card.description]
-  ].map(([name, text]) => ({ name, words: new Set(normalizeTerm(text).split(' ').filter(Boolean).map(canonicalWord)) }));
-  const words = new Set(fields.flatMap(field => [...field.words]));
-  const matches = term => term.split(' ').every(word => words.has(canonicalWord(word)));
-  // ponytail: matching textuel explicable ; ajouter vision/LLM seulement si l’audit montre des faux négatifs importants.
+    ['description WikiMasters', card.description]
+  ].map(([name, text]) => {
+    const words = normalizeTerm(text).split(' ').filter(Boolean).map(canonicalWord);
+    return { name, words: new Set(words), phrase: ` ${words.join(' ')} ` };
+  });
+  const allWords = new Set(fields.flatMap(field => [...field.words]));
+  const expandedMatches = (field, semantic) => semantic.terms.some(candidate => {
+    const words = candidate.split(' ').map(canonicalWord);
+    return words.length > 1
+      ? field.phrase.includes(` ${words.join(' ')} `)
+      : field.words.has(words[0]);
+  });
+  const matches = term => {
+    const semantic = semanticTerms(term);
+    return semantic.expanded
+      ? fields.some(field => expandedMatches(field, semantic))
+      : semantic.terms[0].split(' ').map(canonicalWord).every(word => allWords.has(word));
+  };
+  const sourceMatches = (field, term) => {
+    const semantic = semanticTerms(term);
+    return semantic.expanded
+      ? expandedMatches(field, semantic)
+      : semantic.terms[0].split(' ').map(canonicalWord).some(word => field.words.has(word));
+  };
+  // ponytail: lexique local explicable ; ajouter un modèle sémantique seulement si l'audit montre que ce vocabulaire ne suffit plus.
   return wishlists.flatMap(wishlist => {
     const rules = wishlist.rules || wishlist.cells?.map(cell => parseRuleCell(cell.raw, cell.category)) || [];
     const reasons = rules.filter(rule => !rule.ambiguous && rule.include.some(matches) && !rule.exclude.some(matches))
       .flatMap(rule => rule.include.filter(matches).map(term => ({
         category: rule.category,
         term,
-        sources: fields.filter(field => term.split(' ').some(word => field.words.has(canonicalWord(word)))).map(field => field.name)
+        sources: fields.filter(field => sourceMatches(field, term)).map(field => field.name)
       })));
     return reasons.length ? [{ label: wishlist.label, pseudo: wishlist.pseudo || wishlist.label.slice('échange · '.length), reasons }] : [];
   });
@@ -86,46 +121,6 @@ function buildSyncPlan(cards, wishlists) {
   return { additions, removals, unchanged, ambiguousRules, countsByPseudo };
 }
 
-async function enrichCards(cards, fetchImpl = fetch, apiUrl = 'https://fr.wikipedia.org/w/api.php', onCard) {
-  const enriched = cards.map(card => ({ ...card }));
-  for (let start = 0; start < enriched.length; start += 50) {
-    const batch = enriched.slice(start, start + 50);
-    const url = new URL(apiUrl);
-    url.search = new URLSearchParams({
-      action: 'query',
-      format: 'json',
-      origin: '*',
-      redirects: '1',
-      prop: 'extracts|categories',
-      exintro: '1',
-      explaintext: '1',
-      cllimit: 'max',
-      titles: [...new Set(batch.map(card => card.title))].join('|')
-    });
-    let response;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      response = await fetchImpl(url, { headers: { 'User-Agent': 'wikimasters-a-trier/1.0 (+https://github.com/TheLightningD/wikimasters-a-trier)' } });
-      if (response.status !== 429) break;
-      const seconds = Math.min(Number(response.headers?.get('retry-after')) || 2 ** attempt, 10);
-      await new Promise(resolve => setTimeout(resolve, seconds * 1000));
-    }
-    if (!response.ok) throw new Error(`Wikipédia inaccessible (${response.status})`);
-    const payload = await response.json();
-    if (!payload.query?.pages) throw new Error('Réponse Wikipédia invalide');
-    const redirects = new Map((payload.query.redirects || []).map(item => [normalizeTerm(item.from), normalizeTerm(item.to)]));
-    const pages = new Map(Object.values(payload.query.pages).map(page => [normalizeTerm(page.title), page]));
-    for (const card of batch) {
-      const page = pages.get(redirects.get(normalizeTerm(card.title)) || normalizeTerm(card.title));
-      if (page) {
-        card.description = [card.description, page.extract].filter(Boolean).join(' ');
-        card.metadata = [card.metadata, page.extract, ...(page.categories || []).map(item => item.title)].filter(Boolean).join(' ');
-      }
-      onCard?.(card);
-    }
-  }
-  return enriched;
-}
-
 function parseWishlists(table) {
   const rows = table.rows;
   const headerIndex = rows.findIndex(row => row.c?.some(cell => String(cell?.v ?? '').trim() === 'Pseudo'));
@@ -151,4 +146,4 @@ async function fetchWishlists(fetchImpl = fetch) {
   return parseWishlists(parseGviz(await response.text()));
 }
 
-module.exports = { SHEET_URL, parseGviz, parseWishlists, parseRuleCell, explainMatches, desiredLabels, buildSyncPlan, enrichCards, fetchWishlists };
+module.exports = { SHEET_URL, parseGviz, parseWishlists, parseRuleCell, explainMatches, desiredLabels, buildSyncPlan, fetchWishlists };

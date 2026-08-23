@@ -1,60 +1,88 @@
-name: WikiMasters — ouvrir et étiqueter
+name: WikiMasters — validation du script
 
 on:
-  schedule:
-    # Deux créneaux hors pointe limitent l'effet d'un run planifié retardé ou abandonné par GitHub.
-    - cron: "7,37 * * * *"
-    - cron: "17 3 1 * *"
+  push:
+  pull_request:
   workflow_dispatch:
-    inputs:
-      collection_only:
-        description: "Parcourir uniquement la collection sans ouvrir de paquet"
-        required: false
-        default: false
-        type: boolean
-
+  schedule:
+    - cron: "17 3 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: wikimasters-pulls
-  cancel-in-progress: false
+  group: wikimasters-validation-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  run:
-    if: github.event.schedule != '17 3 1 * *'
+  validation:
     runs-on: ubuntu-latest
-    # Le délai couvre aussi l'attente d'un runner GitHub hébergé.
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
-      - name: Check Node.js
-        run: node -e "if (+process.versions.node.split('.')[0] < 20) process.exit(1)"
-      - run: npm ci --omit=dev
-      - run: npm start
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Préparer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Installer les dépendances
+        id: install
+        run: npm ci --omit=dev
+
+      - name: Vérifier Chrome
+        id: browser
+        run: test -x /usr/bin/google-chrome
+
+      - name: Vérifier le script de bout en bout
+        id: tests
+        run: npm test
         env:
           CHROME_PATH: /usr/bin/google-chrome
-          WIKIMASTERS_EMAIL: ${{ secrets.WIKIMASTERS_EMAIL }}
-          WIKIMASTERS_PASSWORD: ${{ secrets.WIKIMASTERS_PASSWORD }}
-          COLLECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.collection_only }}
 
-  keepalive:
-    if: github.event.schedule == '17 3 1 * *'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          date -u +%F > .github/keepalive
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add .github/keepalive
-          git commit -m "keep scheduled workflow active"
-          git push
+      - name: Publier le bilan
+        if: always()
+        shell: bash
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          TRIGGER: ${{ github.event_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$INSTALL_OUTCOME" != "success" ]]; then
+            RESULT="Échec"
+            CAUSE="L'installation des dépendances a échoué."
+          elif [[ "$BROWSER_OUTCOME" != "success" ]]; then
+            RESULT="Échec"
+            CAUSE="Google Chrome est absent du runner GitHub."
+          elif [[ "$TEST_OUTCOME" != "success" ]]; then
+            RESULT="Échec"
+            CAUSE="La suite de tests a échoué. Consultez l'étape « Vérifier le script de bout en bout »."
+          else
+            RESULT="Succès"
+            CAUSE="Tous les scénarios automatisés sont validés."
+          fi
+
+          {
+            echo "## WikiMasters — $RESULT"
+            echo
+            echo "| Élément | Valeur |"
+            echo "| --- | --- |"
+            echo "| Installation | $INSTALL_OUTCOME |"
+            echo "| Chrome | $BROWSER_OUTCOME |"
+            echo "| Tests | $TEST_OUTCOME |"
+            echo "| Déclencheur | $TRIGGER |"
+            echo "| Commit | \`${COMMIT_SHA:0:12}\` |"
+            echo "| Bilan | $CAUSE |"
+            echo
+            echo "> L'ouverture réelle des boosters reste locale : le site exige une confirmation manuelle « Vérification rapide »."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$RESULT" == "Succès" ]]; then
+            echo "::notice title=WikiMasters validé::$CAUSE"
+          else
+            echo "::error title=Validation WikiMasters en échec::$CAUSE"
+          fi
