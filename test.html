@@ -25,6 +25,7 @@
     const cloudflare = new URLSearchParams(location.search).has('cloudflare');
     const cloudflareAuto = new URLSearchParams(location.search).has('cloudflare-auto');
     const quickCheck = new URLSearchParams(location.search).has('quick-check');
+    const authenticatedSession = document.cookie.includes('sb-test-auth-token=valid');
     const tagged = Array(6).fill(false);
     window.__verifiedCount = 0;
 
@@ -123,7 +124,7 @@
       document.querySelector('form').onsubmit = event => { event.preventDefault(); if (!loginStuck) setTimeout(showPack, 500); };
     };
 
-    setTimeout(challenge ? showLogin : showPack, 300);
+    setTimeout(challenge && !authenticatedSession ? showLogin : showPack, 300);
     document.addEventListener('wm-tri-finished', event => {
       document.querySelector('#result').textContent = JSON.stringify(event.detail);
     });

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node worker.js",
-    "test": "node launcher.test.js && node github-workflow.test.js && node terminal-ui.test.js && node automation-status.test.js && node wishlist.test.js && node pack-navigation.test.js && node test.js"
+    "test": "node launcher.test.js && node github-workflow.test.js && node session-state.test.js && node terminal-ui.test.js && node automation-status.test.js && node wishlist.test.js && node pack-navigation.test.js && node test.js"
   },
   "dependencies": {
     "playwright-core": "1.62.1"

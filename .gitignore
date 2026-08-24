@@ -3,6 +3,11 @@ failure.html
 failure.png
 wishlist-report.json
 .wishlist-summary-test.md
+.session.enc
+.session.json
+.session-next.json
+session.enc
+session-publish/
 *.log
 
 # Dépendances

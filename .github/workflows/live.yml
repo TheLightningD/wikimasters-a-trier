@@ -10,6 +10,11 @@ on:
         required: false
         default: false
         type: boolean
+      reset_session:
+        description: "Ignorer l’état chiffré et réinitialiser depuis le secret GitHub"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -20,13 +25,18 @@ concurrency:
 
 jobs:
   ouverture:
-    # Cloudflare bloque durablement les adresses IP des runners GitHub hébergés.
-    # Le runner Windows interactif réutilise le profil Chrome validé localement.
-    runs-on: [self-hosted, windows, x64, wikimasters]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     timeout-minutes: 40
+    permissions:
+      contents: read
+    outputs:
+      session_ready: ${{ steps.chiffrer.outputs.ready }}
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Préparer Node.js
         uses: actions/setup-node@v7
@@ -35,25 +45,59 @@ jobs:
           cache: npm
 
       - name: Installer les dépendances
-        shell: powershell
-        run: npm.cmd ci --omit=dev
+        run: npm ci --omit=dev
 
-      - name: Vérifier les prérequis locaux
-        shell: powershell
+      - name: Restaurer la session WikiMasters chiffrée
+        env:
+          WIKIMASTERS_SESSION_B64: ${{ secrets.WIKIMASTERS_SESSION_B64 }}
+          RESET_SESSION: ${{ inputs.reset_session }}
         run: |
-          $credentials = Join-Path $env:LOCALAPPDATA 'WikiMasters-A-Trier\credentials.xml'
-          if (-not (Test-Path $credentials)) {
-            throw 'Identifiants locaux absents. Lancez ouvrir-et-trier.cmd une fois avec le même compte Windows.'
-          }
+          rm -f .session.enc .session.json .session-next.json
+          if [ "$RESET_SESSION" != "true" ]; then
+            HTTP_CODE=$(curl --retry 3 --retry-all-errors --silent --show-error \
+              --output /tmp/wikimasters-session-response.json --write-out '%{http_code}' \
+              --header 'User-Agent: WikiMasters-A-Trier' \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/session.enc?ref=wikimasters-session")
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "::error title=Session WikiMasters absente::État chiffré inaccessible (HTTP $HTTP_CODE). Relancez manuellement avec reset_session après avoir exporté le secret."
+              exit 1
+            fi
+            jq -r .content /tmp/wikimasters-session-response.json | tr -d '\n' | base64 -d > .session.enc
+          fi
+          rm -f /tmp/wikimasters-session-response.json
+          node session-state.js restore .session.enc .session.json
 
       - name: Ouvrir les boosters et trier la collection
-        shell: powershell
+        run: npm start
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          COLLECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.collection_only }}
+          WM_STORAGE_STATE_PATH: .session.json
+          WM_STORAGE_STATE_OUT: .session-next.json
+          WM_PRETTY_OUTPUT: "true"
+          WM_MACHINE_OUTPUT: "false"
+
+      - name: Chiffrer la session renouvelée
+        id: chiffrer
+        if: always()
+        env:
+          WIKIMASTERS_SESSION_B64: ${{ secrets.WIKIMASTERS_SESSION_B64 }}
         run: |
-          if ('${{ inputs.collection_only }}' -eq 'true') {
-            .\wishlist-local.ps1 -Full -CollectionOnly
-          } else {
-            .\wishlist-local.ps1 -Full
-          }
+          if [ -s .session-next.json ]; then
+            mkdir -p session-publish
+            node session-state.js save .session-next.json session-publish/session.enc
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Transmettre la session chiffrée
+        if: always() && steps.chiffrer.outputs.ready == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wikimasters-session-${{ github.run_id }}
+          path: session-publish/session.enc
+          retention-days: 1
 
       - name: Publier les diagnostics en cas d’échec
         if: failure()
@@ -65,3 +109,40 @@ jobs:
             failure.html
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Effacer la session du runner
+        if: always()
+        run: rm -rf .session.enc .session.json .session-next.json session-publish /tmp/wikimasters-session-response.json
+
+  sauvegarde-session:
+    needs: ouverture
+    if: always() && needs.ouverture.outputs.session_ready == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Télécharger la session chiffrée
+        uses: actions/download-artifact@v7
+        with:
+          name: wikimasters-session-${{ github.run_id }}
+          path: session-artifact
+
+      - name: Mettre à jour la branche de session
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/wikimasters-session" >/dev/null 2>&1; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref='refs/heads/wikimasters-session' -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          CONTENT=$(base64 -w0 session-artifact/session.enc)
+          CURRENT_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/session.enc?ref=wikimasters-session" --jq .sha 2>/dev/null || true)
+          if [ -n "$CURRENT_SHA" ]; then
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/session.enc" \
+              -f message='chore: renouveler la session WikiMasters chiffrée' \
+              -f content="$CONTENT" -f branch='wikimasters-session' -f sha="$CURRENT_SHA" >/dev/null
+          else
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/session.enc" \
+              -f message='chore: initialiser la session WikiMasters chiffrée' \
+              -f content="$CONTENT" -f branch='wikimasters-session' >/dev/null
+          fi

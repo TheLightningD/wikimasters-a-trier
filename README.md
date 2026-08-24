@@ -5,22 +5,22 @@
 
 GitHub Actions exécute la suite de tests sur ses runners hébergés à chaque modification, à la demande et une fois par jour. Le résumé indique clairement si l’installation et les tests ont réussi, ou quelle étape a échoué.
 
-L’ouverture réelle ne peut plus fonctionner depuis une adresse IP de runner GitHub hébergé : Cloudflare y exige systématiquement une validation humaine. Le workflow **WikiMasters — ouvrir et trier** utilise donc un runner Windows auto-hébergé, lancé dans la session utilisateur, qui réutilise les identifiants DPAPI et le profil Chrome local. GitHub conserve la planification deux fois par heure ; le PC doit être allumé, connecté et le runner doit rester ouvert.
+Le workflow **WikiMasters — ouvrir et trier** s’exécute entièrement sur un runner GitHub hébergé, même lorsque le PC est éteint. Il injecte une session WikiMasters déjà authentifiée et évite ainsi le formulaire Cloudflare, sans résoudre ni contourner le CAPTCHA.
 
-Les identifiants ne sont jamais enregistrés dans le dépôt ni dans les secrets GitHub. Ils restent chiffrés par Windows dans `%LOCALAPPDATA%\WikiMasters-A-Trier\credentials.xml`.
+La session renouvelée est filtrée aux seuls cookies d’authentification WikiMasters, chiffrée en AES-256-GCM puis conservée sur la branche technique `wikimasters-session`. La clé reste le secret GitHub `WIKIMASTERS_SESSION_B64` ; ni les cookies ni les identifiants ne sont enregistrés en clair dans le dépôt.
 
 ## Activer l’ouverture planifiée par GitHub
 
-1. Lancer une fois `ouvrir-et-trier.cmd` pour enregistrer les identifiants et valider Cloudflare dans Chrome.
-2. Dans GitHub, ouvrir **Settings → Actions → Runners → New self-hosted runner**, choisir **Windows / x64** et copier uniquement le jeton temporaire.
-3. Double-cliquer sur `installer-runner-github.cmd`, puis coller ce jeton lorsqu’il est demandé.
-4. Double-cliquer sur `demarrer-runner-github.cmd` et laisser sa fenêtre ouverte.
+1. Lancer une fois `ouvrir-et-trier.cmd` pour se connecter et valider Cloudflare dans Chrome.
+2. Fermer la fenêtre Chrome WikiMasters, puis double-cliquer sur `exporter-session-github.cmd`.
+3. La session est copiée dans le presse-papiers et la page GitHub des secrets s’ouvre. Créer le secret **`WIKIMASTERS_SESSION_B64`** et coller la valeur sans la partager.
+4. Dans **Actions → WikiMasters — ouvrir et trier**, lancer une première exécution manuelle en cochant **reset_session**. Les suivantes seront entièrement automatiques deux fois par heure.
 
-Le runner doit être lancé interactivement, **pas comme service Windows**, afin que Chrome reste visible si Cloudflare redemande une validation. Un hook local refuse tout job qui ne provient pas de `.github/workflows/live.yml` sur `main` avec un déclenchement planifié ou manuel ; les workflows de pull request ne peuvent donc pas utiliser ce PC. Les tests de pull request restent sur les runners GitHub isolés.
+Chaque run sauvegarde la session rafraîchie de manière chiffrée pour le suivant. Si WikiMasters révoque toute la session, refaire les étapes 1 à 3 puis lancer manuellement le workflow en cochant **reset_session** ; aucune intervention n’est normalement nécessaire entre les runs. Les anciens secrets `WIKIMASTERS_EMAIL` et `WIKIMASTERS_PASSWORD` ne sont plus utilisés.
 
 ## Vérifier la version GitHub
 
-Ouvrir l’onglet **Actions**, choisir **WikiMasters — validation du script** pour contrôler le code ou **WikiMasters — ouvrir et trier** pour lancer immédiatement le travail sur le runner Windows. Un run affiché comme **Queued** signifie généralement que `demarrer-runner-github.cmd` n’est pas ouvert.
+Ouvrir l’onglet **Actions**, choisir **WikiMasters — validation du script** pour contrôler le code ou **WikiMasters — ouvrir et trier** pour lancer immédiatement l’automatisation réelle sur GitHub.
 
 ## Lancer l’ouverture et le tri localement
 

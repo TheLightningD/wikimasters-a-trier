@@ -1,4 +1,4 @@
-﻿param([switch]$Audit, [switch]$Full, [switch]$CollectionOnly, [switch]$ResetCredentials)
+﻿param([switch]$Audit, [switch]$Full, [switch]$ResetCredentials)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -88,7 +88,7 @@ try {
   $env:WM_MACHINE_OUTPUT = 'false'
   $env:WM_HEADLESS = 'false'
   if ($Full) {
-    $env:COLLECTION_ONLY = if ($CollectionOnly) { 'true' } else { 'false' }
+    $env:COLLECTION_ONLY = 'false'
     $env:SCAN_COLLECTION = 'true'
     Remove-Item Env:WISHLIST_ONLY, Env:WISHLIST_SYNC, Env:WISHLIST_APPLY -ErrorAction SilentlyContinue
   } else {

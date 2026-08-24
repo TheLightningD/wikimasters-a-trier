@@ -78,7 +78,7 @@ jobs:
             echo "| Commit | \`${COMMIT_SHA:0:12}\` |"
             echo "| Bilan | $CAUSE |"
             echo
-            echo "> L'ouverture réelle des boosters reste locale : le site exige une confirmation manuelle « Vérification rapide »."
+            echo "> L'ouverture réelle des boosters est exécutée par le workflow live avec une session chiffrée et renouvelée automatiquement."
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [[ "$RESULT" == "Succès" ]]; then

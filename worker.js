@@ -11,6 +11,8 @@ const { stagesFor, stageLine, infoLine, doneLine, progressLine, progressBucket }
 const pullsUrl = process.env.WM_URL || 'https://www.wiki-masters.com/pulls';
 const executablePath = process.env.CHROME_PATH;
 const cdpEndpoint = process.env.WM_CDP_ENDPOINT;
+const storageStatePath = process.env.WM_STORAGE_STATE_PATH;
+const storageStateOutput = process.env.WM_STORAGE_STATE_OUT;
 const headless = process.env.WM_HEADLESS !== 'false';
 const loginTimeout = Number(process.env.WM_LOGIN_TIMEOUT) || 20000;
 const prettyOutput = process.env.WM_PRETTY_OUTPUT === 'true';
@@ -206,16 +208,29 @@ async function automate(page, mode, payload) {
 (async () => {
   const startedAt = Date.now();
   const run = { startedAt, mode: runModeLabel() };
-  const browser = cdpEndpoint
-    ? await chromium.connectOverCDP(cdpEndpoint, { timeout: 30000 })
-    : await chromium.launchPersistentContext(process.env.WM_BROWSER_PROFILE || '', {
+  let browser;
+  let context;
+  if (cdpEndpoint) {
+    browser = await chromium.connectOverCDP(cdpEndpoint, { timeout: 30000 });
+    context = browser.contexts()[0];
+  } else if (storageStatePath) {
+    browser = await chromium.launch({
+      headless,
+      ...(executablePath ? { executablePath } : process.platform === 'win32' ? { channel: 'msedge' } : {}),
+      ...browserOptions(process.env)
+    });
+    context = await browser.newContext({ locale: 'fr-FR', storageState: storageStatePath });
+  } else {
+    browser = await chromium.launchPersistentContext(process.env.WM_BROWSER_PROFILE || '', {
       headless,
       locale: 'fr-FR',
       ...(executablePath ? { executablePath } : process.platform === 'win32' ? { channel: 'msedge' } : {}),
       ...browserOptions(process.env)
     });
-  const context = cdpEndpoint ? browser.contexts()[0] : browser;
+    context = browser;
+  }
   const page = context.pages().find(item => /wiki-masters\.com/i.test(item.url())) || context.pages()[0] || await context.newPage();
+  let sessionAuthenticated = false;
   page.on('console', message => {
     const text = message.text();
     if (!text.startsWith('__WM_PROGRESS__')) return;
@@ -287,6 +302,8 @@ async function automate(page, mode, payload) {
       const link = links.find(item => /collection|mes cartes/i.test(`${item.textContent} ${item.getAttribute('aria-label') || ''}`));
       return link?.href || '';
     }) || new URL('/collection', pullsUrl).href;
+    sessionAuthenticated = !await email.isVisible().catch(() => true);
+    if (!sessionAuthenticated) throw new Error('Session WikiMasters non authentifiée.');
     if (prettyOutput) console.log(doneLine('Connexion prête'));
 
     const wishlistOnly = wishlistOnlyMode;
@@ -474,7 +491,11 @@ async function automate(page, mode, payload) {
     }
     throw error;
   } finally {
-    await browser.close();
+    try {
+      if (sessionAuthenticated && storageStateOutput) await context.storageState({ path: storageStateOutput });
+    } finally {
+      await browser.close();
+    }
   }
 })().catch(error => {
   const label = error.exitCode === manualLoginExitCode ? 'PAUSE' : 'ÉCHEC';
