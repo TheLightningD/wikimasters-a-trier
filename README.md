@@ -3,15 +3,24 @@
 [![Validation du script](https://github.com/TheLightningD/wikimasters-a-trier/actions/workflows/run.yml/badge.svg)](https://github.com/TheLightningD/wikimasters-a-trier/actions/workflows/run.yml)
 [![Ouverture et tri](https://github.com/TheLightningD/wikimasters-a-trier/actions/workflows/live.yml/badge.svg)](https://github.com/TheLightningD/wikimasters-a-trier/actions/workflows/live.yml)
 
-GitHub Actions installe les dépendances et exécute toute la suite de tests à chaque modification, à la demande et une fois par jour. Le résumé du workflow indique clairement si l’installation et les tests ont réussi, ou quelle étape a échoué.
+GitHub Actions exécute la suite de tests sur ses runners hébergés à chaque modification, à la demande et une fois par jour. Le résumé indique clairement si l’installation et les tests ont réussi, ou quelle étape a échoué.
 
-GitHub tente aussi l’ouverture réelle des boosters deux fois par heure. Si aucun contrôle manuel n’apparaît, la connexion, l’ouverture et le contrôle de la collection s’exécutent automatiquement. Si Cloudflare ou la fenêtre « Vérification rapide » apparaît, le run s’arrête sans la valider et son résumé indique clairement la cause; le raccourci Windows permet alors de terminer l’opération dans un navigateur visible.
+L’ouverture réelle ne peut plus fonctionner depuis une adresse IP de runner GitHub hébergé : Cloudflare y exige systématiquement une validation humaine. Le workflow **WikiMasters — ouvrir et trier** utilise donc un runner Windows auto-hébergé, lancé dans la session utilisateur, qui réutilise les identifiants DPAPI et le profil Chrome local. GitHub conserve la planification deux fois par heure ; le PC doit être allumé, connecté et le runner doit rester ouvert.
 
-Les identifiants ne sont jamais enregistrés dans le dépôt. L’ouverture automatique utilise uniquement les secrets GitHub `WIKIMASTERS_EMAIL` et `WIKIMASTERS_PASSWORD`.
+Les identifiants ne sont jamais enregistrés dans le dépôt ni dans les secrets GitHub. Ils restent chiffrés par Windows dans `%LOCALAPPDATA%\WikiMasters-A-Trier\credentials.xml`.
+
+## Activer l’ouverture planifiée par GitHub
+
+1. Lancer une fois `ouvrir-et-trier.cmd` pour enregistrer les identifiants et valider Cloudflare dans Chrome.
+2. Dans GitHub, ouvrir **Settings → Actions → Runners → New self-hosted runner**, choisir **Windows / x64** et copier uniquement le jeton temporaire.
+3. Double-cliquer sur `installer-runner-github.cmd`, puis coller ce jeton lorsqu’il est demandé.
+4. Double-cliquer sur `demarrer-runner-github.cmd` et laisser sa fenêtre ouverte.
+
+Le runner doit être lancé interactivement, **pas comme service Windows**, afin que Chrome reste visible si Cloudflare redemande une validation. Un hook local refuse tout job qui ne provient pas de `.github/workflows/live.yml` sur `main` avec un déclenchement planifié ou manuel ; les workflows de pull request ne peuvent donc pas utiliser ce PC. Les tests de pull request restent sur les runners GitHub isolés.
 
 ## Vérifier la version GitHub
 
-Ouvrir l’onglet **Actions**, choisir **WikiMasters — validation du script** pour contrôler le code ou **WikiMasters — ouvrir et trier** pour lancer immédiatement une tentative réelle. En cas d’échec, le résumé du run affiche l’étape concernée et l’annotation renvoie vers les logs utiles.
+Ouvrir l’onglet **Actions**, choisir **WikiMasters — validation du script** pour contrôler le code ou **WikiMasters — ouvrir et trier** pour lancer immédiatement le travail sur le runner Windows. Un run affiché comme **Queued** signifie généralement que `demarrer-runner-github.cmd` n’est pas ouvert.
 
 ## Lancer l’ouverture et le tri localement
 
